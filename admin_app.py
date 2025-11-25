@@ -288,7 +288,7 @@ def admin_login():
     <div class="login-container">
         <div class="university-info">
             <h1>OBONG UNIVERSITY</h1>
-            <div class="subtitle">SRC Elections 2024</div>
+            <div class="subtitle">SRC Elections 2025</div>
         </div>
         
         <div class="admin-badge">
@@ -1042,7 +1042,7 @@ def admin_home():
         <div class="header">
             <div class="university-info">
                 <h1>OBONG UNIVERSITY</h1>
-                <div class="subtitle">Admin Dashboard - SRC Elections 2024</div>
+                <div class="subtitle">Admin Dashboard - SRC Elections 2025</div>
             </div>
             <div class="admin-section">
                 <div class="election-status">
@@ -1292,7 +1292,7 @@ def admin_home():
         </div>
         
         <div class="footer">
-            <p>Obong University SRC Election System &copy; 2024 | Secure Admin Dashboard</p>
+            <p>Obong University SRC Election System &copy; 2025 | Secure Admin Dashboard</p>
             <p>For technical support, contact ICT Department</p>
         </div>
     </div>
