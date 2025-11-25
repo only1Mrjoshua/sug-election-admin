@@ -10,13 +10,21 @@ from functools import wraps
 app = Flask(__name__)
 app.secret_key = 'iauweiyvbiueyckuahsfdyrstvdKYWRIURIVTABSDFHCDVJQWT2648hfjbs'  # Change this in production!
 
-# MongoDB configuration
-MONGO_URI = "mongodb+srv://only1MrJoshua:LovuLord2025@cluster0.9jqnavg.mongodb.net/?appName=Cluster0/election_db"  # Update with your MongoDB URI
+# MongoDB configuration - FIXED URI
+MONGO_URI = "mongodb+srv://only1MrJoshua:LovuLord2025@cluster0.9jqnavg.mongodb.net/election_db?retryWrites=true&w=majority"
 DATABASE_NAME = "election_db"
 
 # Initialize MongoDB
-client = MongoClient(MONGO_URI)
-db = client[DATABASE_NAME]
+try:
+    client = MongoClient(MONGO_URI)
+    db = client[DATABASE_NAME]
+    # Test connection
+    client.admin.command('ping')
+    print("✅ MongoDB connection successful!")
+except Exception as e:
+    print(f"❌ MongoDB connection failed: {e}")
+    # Fallback to local database or exit
+    exit(1)
 
 # Initialize Flask-Login
 login_manager = LoginManager()
@@ -38,47 +46,378 @@ def load_user(username):
         return User(username)
     return None
 
+# Collections
+voters_collection = db['voters']
+candidates_collection = db['candidates']
+votes_collection = db['votes']
+election_settings_collection = db['election_settings']
+
 def init_db():
-    """Initialize database with required collections"""
-    # Create collections if they don't exist
-    collections = ['voters', 'candidates', 'votes', 'election_settings']
+    """Initialize database with sample data if needed"""
+    # Create indexes with error handling
+    indexes_to_create = [
+        (voters_collection, "matric_number", True),
+        (voters_collection, "email", True),
+        (voters_collection, "ip_hash", False),
+        (voters_collection, "name", False),
+        (candidates_collection, "name", False),
+        (candidates_collection, "position", False),
+        (votes_collection, "voter_id", True),
+        (votes_collection, "candidate_id", False),
+    ]
     
-    for collection in collections:
-        if collection not in db.list_collection_names():
-            db.create_collection(collection)
-    
-    # Initialize election settings
-    if db.election_settings.count_documents({}) == 0:
-        db.election_settings.insert_one({
-            'election_status': 'not_started',  # not_started, ongoing, paused, ended
+    for collection, field, unique in indexes_to_create:
+        try:
+            if unique:
+                collection.create_index(field, unique=True)
+            else:
+                collection.create_index(field)
+            print(f"✅ Created index for {field}")
+        except Exception as e:
+            print(f"⚠️  Index warning for {field}: {e}")
+
+    # Initialize election settings if they don't exist
+    if election_settings_collection.count_documents({}) == 0:
+        election_settings_collection.insert_one({
+            'election_status': 'not_started',
             'start_time': None,
             'end_time': None,
-            'created_at': datetime.utcnow()
+            'created_at': datetime.utcnow(),
+            'updated_at': datetime.utcnow()
         })
-    
-    # Add some sample candidates if none exist
-    if db.candidates.count_documents({}) == 0:
+        print("✅ Election settings initialized")
+
+    # Add comprehensive sample candidates if none exist
+    if candidates_collection.count_documents({}) == 0:
         sample_candidates = [
+            # SRC President (3 candidates)
             {
-                'name': 'John Doe',
-                'position': 'President',
-                'department': 'Computer Science',
-                'created_at': datetime.utcnow()
+                "name": "John Chukwuma",
+                "position": "SRC President",
+                "faculty": "Natural and Applied Science",
+                "created_at": datetime.utcnow()
             },
             {
-                'name': 'Jane Smith',
-                'position': 'President',
-                'department': 'Political Science',
-                'created_at': datetime.utcnow()
+                "name": "Maria Okon",
+                "position": "SRC President", 
+                "faculty": "Management Science",
+                "created_at": datetime.utcnow()
             },
             {
-                'name': 'Mike Johnson',
-                'position': 'Vice President',
-                'department': 'Economics',
-                'created_at': datetime.utcnow()
+                "name": "David Bassey",
+                "position": "SRC President",
+                "faculty": "Social Science",
+                "created_at": datetime.utcnow()
+            },
+            
+            # SRC Vice President (3 candidates)
+            {
+                "name": "Grace Emmanuel",
+                "position": "SRC Vice President",
+                "faculty": "Management Science",
+                "created_at": datetime.utcnow()
+            },
+            {
+                "name": "Samuel Johnson",
+                "position": "SRC Vice President",
+                "faculty": "Natural and Applied Science",
+                "created_at": datetime.utcnow()
+            },
+            {
+                "name": "Fatima Bello",
+                "position": "SRC Vice President",
+                "faculty": "Social Science",
+                "created_at": datetime.utcnow()
+            },
+            
+            # SRC Secretary (3 candidates)
+            {
+                "name": "Chinwe Okafor",
+                "position": "SRC Secretary",
+                "faculty": "Arts and Communications",
+                "created_at": datetime.utcnow()
+            },
+            {
+                "name": "Michael Adebayo",
+                "position": "SRC Secretary",
+                "faculty": "Natural and Applied Science",
+                "created_at": datetime.utcnow()
+            },
+            {
+                "name": "Jennifer Musa",
+                "position": "SRC Secretary",
+                "faculty": "Management Science",
+                "created_at": datetime.utcnow()
+            },
+            
+            # Senate Members - Natural and Applied Science (4 candidates for 2 positions)
+            {
+                "name": "Emeka Nwosu",
+                "position": "Senate Member - Natural and Applied Science",
+                "faculty": "Natural and Applied Science",
+                "created_at": datetime.utcnow()
+            },
+            {
+                "name": "Bisi Adekunle",
+                "position": "Senate Member - Natural and Applied Science",
+                "faculty": "Natural and Applied Science",
+                "created_at": datetime.utcnow()
+            },
+            {
+                "name": "Tunde Ogunleye",
+                "position": "Senate Member - Natural and Applied Science",
+                "faculty": "Natural and Applied Science",
+                "created_at": datetime.utcnow()
+            },
+            {
+                "name": "Ngozi Eze",
+                "position": "Senate Member - Natural and Applied Science",
+                "faculty": "Natural and Applied Science",
+                "created_at": datetime.utcnow()
+            },
+            
+            # Senate Members - Management Science (4 candidates for 2 positions)
+            {
+                "name": "Oluwatoyin Bankole",
+                "position": "Senate Member - Management Science",
+                "faculty": "Management Science",
+                "created_at": datetime.utcnow()
+            },
+            {
+                "name": "James Okoro",
+                "position": "Senate Member - Management Science",
+                "faculty": "Management Science",
+                "created_at": datetime.utcnow()
+            },
+            {
+                "name": "Patience Udoh",
+                "position": "Senate Member - Management Science",
+                "faculty": "Management Science",
+                "created_at": datetime.utcnow()
+            },
+            {
+                "name": "Sunday Moses",
+                "position": "Senate Member - Management Science",
+                "faculty": "Management Science",
+                "created_at": datetime.utcnow()
+            },
+            
+            # Senate Members - Social Science (4 candidates for 2 positions)
+            {
+                "name": "Aisha Ibrahim",
+                "position": "Senate Member - Social Science",
+                "faculty": "Social Science",
+                "created_at": datetime.utcnow()
+            },
+            {
+                "name": "Peter Okon",
+                "position": "Senate Member - Social Science",
+                "faculty": "Social Science",
+                "created_at": datetime.utcnow()
+            },
+            {
+                "name": "Ruth Chukwu",
+                "position": "Senate Member - Social Science",
+                "faculty": "Social Science",
+                "created_at": datetime.utcnow()
+            },
+            {
+                "name": "Daniel Akpan",
+                "position": "Senate Member - Social Science",
+                "faculty": "Social Science",
+                "created_at": datetime.utcnow()
+            },
+            
+            # Senate Members - Arts and Communications (4 candidates for 2 positions)
+            {
+                "name": "Chioma Nwankwo",
+                "position": "Senate Member - Arts and Communications",
+                "faculty": "Arts and Communications",
+                "created_at": datetime.utcnow()
+            },
+            {
+                "name": "Kolawole Adeyemi",
+                "position": "Senate Member - Arts and Communications",
+                "faculty": "Arts and Communications",
+                "created_at": datetime.utcnow()
+            },
+            {
+                "name": "Mercy Thompson",
+                "position": "Senate Member - Arts and Communications",
+                "faculty": "Arts and Communications",
+                "created_at": datetime.utcnow()
+            },
+            {
+                "name": "Ibrahim Sani",
+                "position": "Senate Member - Arts and Communications",
+                "faculty": "Arts and Communications",
+                "created_at": datetime.utcnow()
+            },
+            
+            # Representative Members - Information (3 candidates)
+            {
+                "name": "Tech Savvy Smart",
+                "position": "Information Representative",
+                "faculty": "Natural and Applied Science",
+                "created_at": datetime.utcnow()
+            },
+            {
+                "name": "Media Pro Grace",
+                "position": "Information Representative",
+                "faculty": "Arts and Communications",
+                "created_at": datetime.utcnow()
+            },
+            {
+                "name": "Info King David",
+                "position": "Information Representative",
+                "faculty": "Arts and Communications",
+                "created_at": datetime.utcnow()
+            },
+            
+            # Representative Members - Social (3 candidates)
+            {
+                "name": "Social Butterfly Amina",
+                "position": "Social Representative",
+                "faculty": "Social Science",
+                "created_at": datetime.utcnow()
+            },
+            {
+                "name": "Event Master Tunde",
+                "position": "Social Representative",
+                "faculty": "Management Science",
+                "created_at": datetime.utcnow()
+            },
+            {
+                "name": "Party Planner Joy",
+                "position": "Social Representative",
+                "faculty": "Arts and Communications",
+                "created_at": datetime.utcnow()
+            },
+            
+            # Representative Members - Sports (3 candidates)
+            {
+                "name": "Sport Star Mike",
+                "position": "Sports Representative",
+                "faculty": "Natural and Applied Science",
+                "created_at": datetime.utcnow()
+            },
+            {
+                "name": "Team Captain Bola",
+                "position": "Sports Representative",
+                "faculty": "Natural and Applied Science",
+                "created_at": datetime.utcnow()
+            },
+            {
+                "name": "Fitness Queen Sarah",
+                "position": "Sports Representative",
+                "faculty": "Natural and Applied Science",
+                "created_at": datetime.utcnow()
+            },
+            
+            # Representative Members - Security (3 candidates)
+            {
+                "name": "Safety First James",
+                "position": "Security Representative",
+                "faculty": "Social Science",
+                "created_at": datetime.utcnow()
+            },
+            {
+                "name": "Campus Guard Faith",
+                "position": "Security Representative",
+                "faculty": "Social Science",
+                "created_at": datetime.utcnow()
+            },
+            {
+                "name": "Watchful Eye Ken",
+                "position": "Security Representative",
+                "faculty": "Social Science",
+                "created_at": datetime.utcnow()
+            },
+            
+            # Representative Members - Transport (3 candidates)
+            {
+                "name": "Mobility Expert John",
+                "position": "Transport Representative",
+                "faculty": "Management Science",
+                "created_at": datetime.utcnow()
+            },
+            {
+                "name": "Ride Master Peace",
+                "position": "Transport Representative",
+                "faculty": "Management Science",
+                "created_at": datetime.utcnow()
+            },
+            {
+                "name": "Commute King Henry",
+                "position": "Transport Representative",
+                "faculty": "Management Science",
+                "created_at": datetime.utcnow()
+            },
+            
+            # Representative Members - Hostel 1 (3 candidates)
+            {
+                "name": "Dorm Leader Tina",
+                "position": "Hostel 1 Representative",
+                "faculty": "Natural and Applied Science",
+                "created_at": datetime.utcnow()
+            },
+            {
+                "name": "Room Rep Ahmed",
+                "position": "Hostel 1 Representative",
+                "faculty": "Natural and Applied Science",
+                "created_at": datetime.utcnow()
+            },
+            {
+                "name": "Hostel Hero Linda",
+                "position": "Hostel 1 Representative",
+                "faculty": "Natural and Applied Science",
+                "created_at": datetime.utcnow()
+            },
+            
+            # Representative Members - Hostel 2 (3 candidates)
+            {
+                "name": "Accommodation Ace Paul",
+                "position": "Hostel 2 Representative",
+                "faculty": "Natural and Applied Science",
+                "created_at": datetime.utcnow()
+            },
+            {
+                "name": "Dorm Chief Blessing",
+                "position": "Hostel 2 Representative",
+                "faculty": "Natural and Applied Science",
+                "created_at": datetime.utcnow()
+            },
+            {
+                "name": "Hostel Head Victor",
+                "position": "Hostel 2 Representative",
+                "faculty": "Natural and Applied Science",
+                "created_at": datetime.utcnow()
+            },
+            
+            # Representative Members - Chapel (3 candidates)
+            {
+                "name": "Spiritual Guide Peter",
+                "position": "Chapel Representative",
+                "faculty": "Arts and Communications",
+                "created_at": datetime.utcnow()
+            },
+            {
+                "name": "Faith Leader Deborah",
+                "position": "Chapel Representative",
+                "faculty": "Arts and Communications",
+                "created_at": datetime.utcnow()
+            },
+            {
+                "name": "Morality Mentor Joseph",
+                "position": "Chapel Representative",
+                "faculty": "Arts and Communications",
+                "created_at": datetime.utcnow()
             }
         ]
-        db.candidates.insert_many(sample_candidates)
+        candidates_collection.insert_many(sample_candidates)
+        print("✅ Comprehensive sample candidates added to MongoDB")
+    else:
+        print("✅ Candidates already exist in database")
 
 # Initialize database
 init_db()
@@ -348,10 +687,16 @@ def admin_logout():
 @login_required
 def admin_home():
     """Admin dashboard home page"""
-    # Get election status
-    election_settings = db.election_settings.find_one({})
+    # Get election status - FIXED: Handle None case
+    election_settings = election_settings_collection.find_one({})
     
-    return f'''
+    # Safe access to election status
+    election_status = 'not_started'
+    if election_settings:
+        election_status = election_settings.get('election_status', 'not_started')
+    
+    # Create the dashboard HTML with safe election status
+    dashboard_html = f'''
     <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -433,9 +778,9 @@ def admin_home():
             background: {{
                 'not_started': 'var(--medium-gray)',
                 'ongoing': 'var(--primary-green)',
-                'paused': 'var(--primary-yellow)',
+                'paused': 'var(--primary-yellow)', 
                 'ended': 'var(--primary-red)'
-            }}[election_settings.get('election_status', 'not_started')];
+            }}.get('{election_status}', 'var(--medium-gray)');
             color: var(--white);
             padding: 10px 20px;
             border-radius: 30px;
@@ -1047,7 +1392,7 @@ def admin_home():
             <div class="admin-section">
                 <div class="election-status">
                     <i class="fas fa-circle"></i>
-                    {election_settings.get('election_status', 'not_started').replace('_', ' ').title()}
+                    {election_status.replace('_', ' ').title()}
                 </div>
                 <div class="admin-badge">
                     <i class="fas fa-shield-alt"></i>
@@ -1744,6 +2089,8 @@ def admin_home():
 </body>
 </html>
     '''
+    
+    return render_template_string(dashboard_html)
 
 # Admin API Routes
 @app.route('/api/stats', methods=['GET'])
@@ -1752,10 +2099,10 @@ def get_stats():
     """Get election statistics"""
     try:
         # Total registered voters
-        total_voters = db.voters.count_documents({'location_verified': True})
+        total_voters = voters_collection.count_documents({'location_verified': True})
         
         # Total votes cast
-        votes_cast = db.votes.count_documents({})
+        votes_cast = votes_collection.count_documents({})
         
         return jsonify({
             'success': True,
@@ -1787,13 +2134,13 @@ def get_results():
             }
         ]
         
-        votes_by_candidate = list(db.votes.aggregate(pipeline))
+        votes_by_candidate = list(votes_collection.aggregate(pipeline))
         
         # Convert to dictionary for easy lookup
         votes_dict = {vote['_id']: vote['votes'] for vote in votes_by_candidate}
         
         # Get all candidates
-        candidates = list(db.candidates.find({}))
+        candidates = list(candidates_collection.find({}))
         
         results_list = []
         for candidate in candidates:
@@ -1804,7 +2151,7 @@ def get_results():
                 'id': candidate_id,
                 'name': candidate['name'],
                 'position': candidate['position'],
-                'department': candidate.get('department', ''),
+                'department': candidate.get('faculty', ''),
                 'votes': votes
             }
             results_list.append(candidate_data)
@@ -1826,15 +2173,15 @@ def get_results():
 def get_voters():
     """Get list of all registered voters"""
     try:
-        voters = list(db.voters.find({}).sort('registration_date', -1))
+        voters = list(voters_collection.find({}).sort('registration_date', -1))
         
         voters_list = []
         for voter in voters:
             voters_list.append({
-                'student_id': voter.get('student_id', ''),
+                'student_id': voter.get('matric_number', ''),
                 'name': voter.get('name', ''),
                 'email': voter.get('email', ''),
-                'department': voter.get('department', ''),
+                'department': voter.get('faculty', ''),
                 'location_verified': voter.get('location_verified', False)
             })
         
@@ -1857,45 +2204,49 @@ def control_election():
         data = request.get_json()
         action = data.get('action')
         
-        election_settings = db.election_settings.find_one({})
+        election_settings = election_settings_collection.find_one({})
         
         if action == 'start':
-            db.election_settings.update_one({}, {
+            election_settings_collection.update_one({}, {
                 '$set': {
                     'election_status': 'ongoing',
                     'start_time': datetime.utcnow(),
-                    'end_time': None
+                    'end_time': None,
+                    'updated_at': datetime.utcnow()
                 }
-            })
+            }, upsert=True)
             message = 'Election has been started. Voting is now open.'
             
         elif action == 'pause':
-            db.election_settings.update_one({}, {
+            election_settings_collection.update_one({}, {
                 '$set': {
-                    'election_status': 'paused'
+                    'election_status': 'paused',
+                    'updated_at': datetime.utcnow()
                 }
-            })
+            }, upsert=True)
             message = 'Election has been paused. Voting is temporarily suspended.'
             
         elif action == 'end':
-            db.election_settings.update_one({}, {
+            election_settings_collection.update_one({}, {
                 '$set': {
                     'election_status': 'ended',
-                    'end_time': datetime.utcnow()
+                    'end_time': datetime.utcnow(),
+                    'updated_at': datetime.utcnow()
                 }
-            })
+            }, upsert=True)
             message = 'Election has been ended. Voting is now closed.'
             
         elif action == 'reset':
             # Clear all votes (be careful with this!)
-            db.votes.delete_many({})
-            db.election_settings.update_one({}, {
+            votes_collection.delete_many({})
+            election_settings_collection.update_one({}, {
                 '$set': {
                     'election_status': 'not_started',
                     'start_time': None,
-                    'end_time': None
+                    'end_time': None,
+                    'updated_at': datetime.utcnow()
                 }
-            })
+            }, upsert=True)
             message = 'Election has been reset. All votes have been cleared.'
             
         else:
@@ -1921,10 +2272,10 @@ def export_data():
     """Export all election data"""
     try:
         # Get all data
-        voters = list(db.voters.find({}))
-        candidates = list(db.candidates.find({}))
-        votes = list(db.votes.find({}))
-        election_settings = db.election_settings.find_one({})
+        voters = list(voters_collection.find({}))
+        candidates = list(candidates_collection.find({}))
+        votes = list(votes_collection.find({}))
+        election_settings = election_settings_collection.find_one({})
         
         # Convert ObjectId to string for JSON serialization
         for voter in voters:
@@ -1964,16 +2315,17 @@ def debug_info():
     return jsonify({
         'database_name': DATABASE_NAME,
         'collections': db.list_collection_names(),
-        'voters_count': db.voters.count_documents({}),
-        'candidates_count': db.candidates.count_documents({}),
-        'votes_count': db.votes.count_documents({})
+        'voters_count': voters_collection.count_documents({}),
+        'candidates_count': candidates_collection.count_documents({}),
+        'votes_count': votes_collection.count_documents({}),
+        'election_settings': election_settings_collection.find_one({})
     })
 
 if __name__ == '__main__':
     print("🚀 Starting Admin Dashboard - Obong University SRC Elections")
     print(f"📊 Database: MongoDB - {DATABASE_NAME}")
     print("🔐 Admin Login required at: http://localhost:5002/admin/login")
-    print("👤 Default credentials: admin / admin123")
+    print("👤 Default credentials: admin / obonguni2025")
     print("✅ Database initialized successfully!")
     print("🌐 Admin Dashboard running at: http://localhost:5002")
     print("⚙️  Admins can control election status and monitor results")
