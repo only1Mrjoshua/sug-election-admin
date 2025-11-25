@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template, redirect, url_for, flash
+from flask import Flask, request, jsonify, render_template_string, redirect, url_for, flash
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from pymongo import MongoClient
 from bson.objectid import ObjectId
@@ -99,7 +99,7 @@ def admin_login():
         else:
             flash('Invalid credentials. Please try again.', 'error')
     
-    return '''
+    login_html = '''
     <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -261,6 +261,12 @@ def admin_login():
             color: var(--primary-red);
         }
         
+        .alert-success {
+            background: var(--light-green);
+            border-left: 5px solid var(--primary-green);
+            color: var(--primary-green);
+        }
+        
         .login-footer {
             margin-top: 25px;
             color: var(--medium-gray);
@@ -332,6 +338,8 @@ def admin_login():
 </body>
 </html>
     '''
+    
+    return render_template_string(login_html)
 
 @app.route('/admin/logout')
 @login_required
