@@ -6,6 +6,8 @@ from datetime import datetime
 import bcrypt
 import os
 from functools import wraps
+import hashlib
+import requests
 
 app = Flask(__name__)
 app.secret_key = 'iauweiyvbiueyckuahsfdyrstvdKYWRIURIVTABSDFHCDVJQWT2648hfjbs'  # Change this in production!
@@ -52,9 +54,61 @@ candidates_collection = db['candidates']
 votes_collection = db['votes']
 election_settings_collection = db['election_settings']
 
+def get_client_ip():
+    """Get client IP address"""
+    if request.environ.get('HTTP_X_FORWARDED_FOR'):
+        ip = request.environ['HTTP_X_FORWARDED_FOR'].split(',')[0]
+    else:
+        ip = request.environ.get('REMOTE_ADDR', '127.0.0.1')
+    return ip
+
+def hash_ip(ip_address):
+    """Hash IP address for privacy"""
+    return hashlib.sha256(ip_address.encode()).hexdigest()
+
+def get_ip_location(ip_address):
+    """Get location information for an IP address"""
+    try:
+        # Using ipapi.co for IP geolocation
+        response = requests.get(f'http://ipapi.co/{ip_address}/json/', timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            return {
+                'city': data.get('city', 'Unknown'),
+                'region': data.get('region', 'Unknown'),
+                'country': data.get('country_name', 'Unknown'),
+                'latitude': data.get('latitude'),
+                'longitude': data.get('longitude'),
+                'isp': data.get('org', 'Unknown')
+            }
+    except Exception as e:
+        print(f"⚠️  IP location lookup failed: {e}")
+    
+    return {
+        'city': 'Unknown',
+        'region': 'Unknown', 
+        'country': 'Unknown',
+        'latitude': None,
+        'longitude': None,
+        'isp': 'Unknown'
+    }
+
 def init_db():
     """Initialize database with sample data if needed"""
-    # Create indexes with error handling
+    # First, clean up any existing problematic indexes
+    try:
+        # Get all current indexes on votes collection
+        current_indexes = list(votes_collection.list_indexes())
+        for index in current_indexes:
+            index_name = index['name']
+            # Remove problematic unique index on voter_id alone if it exists
+            if index_name == 'voter_id_1' and index.get('unique', False):
+                votes_collection.drop_index('voter_id_1')
+                print("✅ Removed problematic unique index on voter_id")
+    except Exception as e:
+        print(f"ℹ️  Index cleanup: {e}")
+
+    # Create correct indexes
     indexes_to_create = [
         (voters_collection, "matric_number", True),
         (voters_collection, "email", True),
@@ -62,17 +116,15 @@ def init_db():
         (voters_collection, "name", False),
         (candidates_collection, "name", False),
         (candidates_collection, "position", False),
-        # REMOVED: (votes_collection, "voter_id", True),  # This was causing the issue
-        (votes_collection, "voter_id", False),  # Changed to non-unique
         (votes_collection, "candidate_id", False),
-        # Add compound unique index to prevent duplicate votes for same position
+        # Compound unique index - allows multiple votes per voter but only one per position
         (votes_collection, [("voter_id", 1), ("candidate_position", 1)], True),
     ]
     
     for collection, field, unique in indexes_to_create:
         try:
             if isinstance(field, list):  # Compound index
-                collection.create_index(field, unique=unique)
+                collection.create_index(field, unique=unique, name="unique_vote_per_position")
             else:  # Single field index
                 if unique:
                     collection.create_index(field, unique=True)
@@ -1935,7 +1987,7 @@ def admin_home():
                             <div class="voter-info">
                                 <div class="voter-name">${{voter.name}}</div>
                                 <div class="voter-details">
-                                    ID: ${{voter.student_id}} | Email: ${{voter.email}} | Department: ${{voter.department || 'Not specified'}}
+                                    Matric: ${{voter.matric_number}} | Email: ${{voter.email}} | Faculty: ${{voter.faculty || 'Not specified'}}
                                 </div>
                             </div>
                             <div class="voter-status ${{voter.location_verified ? 'status-verified' : 'status-pending'}}">
@@ -2173,11 +2225,14 @@ def get_voters():
         voters_list = []
         for voter in voters:
             voters_list.append({
-                'student_id': voter.get('matric_number', ''),
+                'matric_number': voter.get('matric_number', ''),
                 'name': voter.get('name', ''),
                 'email': voter.get('email', ''),
-                'department': voter.get('faculty', ''),
-                'location_verified': voter.get('location_verified', False)
+                'faculty': voter.get('faculty', ''),
+                'location_verified': voter.get('location_verified', False),
+                'has_voted': voter.get('has_voted', False),
+                'ip_address': voter.get('ip_address', ''),
+                'registration_date': voter.get('registration_date', '').isoformat() if voter.get('registration_date') else ''
             })
         
         return jsonify({
@@ -2234,6 +2289,8 @@ def control_election():
         elif action == 'reset':
             # Clear all votes (be careful with this!)
             votes_collection.delete_many({})
+            # Reset all voters' has_voted status
+            voters_collection.update_many({}, {'$set': {'has_voted': False}})
             election_settings_collection.update_one({}, {
                 '$set': {
                     'election_status': 'not_started',
@@ -2242,7 +2299,7 @@ def control_election():
                     'updated_at': datetime.utcnow()
                 }
             }, upsert=True)
-            message = 'Election has been reset. All votes have been cleared.'
+            message = 'Election has been reset. All votes have been cleared and voters can vote again.'
             
         else:
             return jsonify({
@@ -2316,7 +2373,58 @@ def debug_info():
         'election_settings': election_settings_collection.find_one({})
     })
 
+@app.route('/api/debug/reset-votes', methods=['POST'])
+@login_required
+def reset_votes():
+    """Debug endpoint to reset all votes and voter status (for testing only)"""
+    try:
+        # Delete all votes
+        votes_result = votes_collection.delete_many({})
+        # Reset all voters' has_voted status
+        voters_result = voters_collection.update_many({}, {'$set': {'has_voted': False}})
+        
+        return jsonify({
+            'success': True,
+            'message': f'Reset complete: {votes_result.deleted_count} votes deleted, {voters_result.modified_count} voters reset',
+            'votes_deleted': votes_result.deleted_count,
+            'voters_reset': voters_result.modified_count
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Error resetting votes: {str(e)}'
+        }), 500
+
+@app.route('/api/debug/fix-indexes', methods=['POST'])
+@login_required
+def fix_indexes():
+    """Fix the problematic indexes"""
+    try:
+        # Remove the problematic unique index on voter_id alone
+        votes_collection.drop_index('voter_id_1')
+        print("✅ Removed problematic unique index on voter_id")
+        
+        # Ensure the compound index exists
+        votes_collection.create_index([("voter_id", 1), ("candidate_position", 1)], unique=True, name="unique_vote_per_position")
+        print("✅ Ensured compound unique index exists")
+        
+        # Recreate other necessary indexes
+        votes_collection.create_index("candidate_id")
+        print("✅ Recreated candidate_id index")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Indexes fixed successfully!'
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Error fixing indexes: {str(e)}'
+        }), 500
+
+# Fix for Render deployment - use PORT environment variable
 if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5002))
     print("🚀 Starting Admin Dashboard - Obong University SRC Elections")
     print(f"📊 Database: MongoDB - {DATABASE_NAME}")
     print("🔐 Admin Login required at: http://localhost:5002/admin/login")
@@ -2326,4 +2434,4 @@ if __name__ == '__main__':
     print("⚙️  Admins can control election status and monitor results")
     print("\n⏹️  Press Ctrl+C to stop the server")
     
-    app.run(debug=True, host='0.0.0.0', port=5002)
+    app.run(debug=False, host='0.0.0.0', port=port)
