@@ -62,30 +62,25 @@ def init_db():
         (voters_collection, "name", False),
         (candidates_collection, "name", False),
         (candidates_collection, "position", False),
-        (votes_collection, "voter_id", True),
+        # REMOVED: (votes_collection, "voter_id", True),  # This was causing the issue
+        (votes_collection, "voter_id", False),  # Changed to non-unique
         (votes_collection, "candidate_id", False),
+        # Add compound unique index to prevent duplicate votes for same position
+        (votes_collection, [("voter_id", 1), ("candidate_position", 1)], True),
     ]
     
     for collection, field, unique in indexes_to_create:
         try:
-            if unique:
-                collection.create_index(field, unique=True)
-            else:
-                collection.create_index(field)
+            if isinstance(field, list):  # Compound index
+                collection.create_index(field, unique=unique)
+            else:  # Single field index
+                if unique:
+                    collection.create_index(field, unique=True)
+                else:
+                    collection.create_index(field)
             print(f"✅ Created index for {field}")
         except Exception as e:
             print(f"⚠️  Index warning for {field}: {e}")
-
-    # Initialize election settings if they don't exist
-    if election_settings_collection.count_documents({}) == 0:
-        election_settings_collection.insert_one({
-            'election_status': 'not_started',
-            'start_time': None,
-            'end_time': None,
-            'created_at': datetime.utcnow(),
-            'updated_at': datetime.utcnow()
-        })
-        print("✅ Election settings initialized")
 
     # Add comprehensive sample candidates if none exist
     if candidates_collection.count_documents({}) == 0:
