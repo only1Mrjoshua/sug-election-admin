@@ -26,7 +26,7 @@ login_manager.login_message = 'Please log in to access this page.'
 
 # Admin credentials (in production, store hashed passwords in database)
 ADMIN_USERNAME = "admin"
-ADMIN_PASSWORD_HASH = bcrypt.hashpw("admin123".encode('utf-8'), bcrypt.gensalt())
+ADMIN_PASSWORD_HASH = bcrypt.hashpw("obonguni2025".encode('utf-8'), bcrypt.gensalt())
 
 class User(UserMixin):
     def __init__(self, username):
@@ -329,11 +329,6 @@ def admin_login():
                 Login to Dashboard
             </button>
         </form>
-        
-        <div class="login-footer">
-            <p><strong>Default Credentials:</strong> admin / admin123</p>
-            <p style="margin-top: 10px; font-size: 0.8rem;">Change these credentials in production!</p>
-        </div>
     </div>
 </body>
 </html>
