@@ -9,7 +9,15 @@ import os
 
 app = Flask(__name__, template_folder='templates')
 app.secret_key = 'iauweiyvbiueyckuahsfdyrstvdKYWRIURIVTABSDFHCDVJQWT2648hfjbs'
-CORS(app)  # Enable CORS for all routes
+CORS(app, 
+     origins=[
+         "https://obong-university-src-election-admin-9x5w.onrender.com",
+         "http://localhost:5000", 
+         "http://127.0.0.1:5000"
+     ],
+     supports_credentials=True,
+     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+     allow_headers=["Content-Type", "Authorization"])
 
 # MongoDB configuration
 MONGO_URI = "mongodb+srv://only1MrJoshua:LovuLord2025@cluster0.9jqnavg.mongodb.net/election_db?retryWrites=true&w=majority"
@@ -422,6 +430,14 @@ def control_election():
             'success': False,
             'message': f'Error controlling election: {str(e)}'
         }), 500
+
+@app.route('/api/health')
+def health_check():
+    return jsonify({
+        'status': 'healthy',
+        'message': 'Server is running',
+        'timestamp': datetime.utcnow().isoformat()
+    })
 
 @app.route('/api/election/status', methods=['GET'])
 @login_required
