@@ -197,6 +197,15 @@
         pointer-events: none;
       }
 
+      .environment-info {
+        margin-top: 15px;
+        padding: 10px;
+        background: var(--light-yellow);
+        border-radius: var(--radius);
+        font-size: 0.8rem;
+        color: var(--medium-gray);
+      }
+
       @media (max-width: 480px) {
         .login-container {
           padding: 30px 20px;
@@ -260,21 +269,59 @@
         </button>
       </form>
 
+      <div class="environment-info" id="environmentInfo">
+        <i class="fas fa-info-circle"></i>
+        <span id="environmentText">Detecting environment...</span>
+      </div>
+
       <div class="login-footer">
         <p>For authorized personnel only</p>
+        <p>Default credentials: admin / obonguni2025</p>
       </div>
     </div>
 
     <script>
       class AdminAuth {
         constructor() {
-          // Auto-detect base URL for both localhost and Render
-          this.apiBase = window.location.origin + '/api';
           this.init();
         }
 
         init() {
           this.bindEvents();
+          this.detectEnvironment();
+        }
+
+        // Detect current environment and update UI
+        detectEnvironment() {
+          const environmentInfo = document.getElementById('environmentInfo');
+          const environmentText = document.getElementById('environmentText');
+          
+          if (window.location.hostname.includes('render.com') || 
+              window.location.hostname.includes('obong-university')) {
+            environmentText.textContent = 'Production Environment (Render)';
+            environmentInfo.style.background = 'var(--light-green)';
+            environmentInfo.style.borderLeft = '5px solid var(--primary-green)';
+          } else if (window.location.hostname === 'localhost' || 
+                     window.location.hostname === '127.0.0.1') {
+            environmentText.textContent = 'Development Environment (Localhost)';
+            environmentInfo.style.background = 'var(--light-yellow)';
+            environmentInfo.style.borderLeft = '5px solid var(--primary-yellow)';
+          } else {
+            environmentText.textContent = 'Unknown Environment';
+            environmentInfo.style.background = 'var(--light-red)';
+            environmentInfo.style.borderLeft = '5px solid var(--primary-red)';
+          }
+        }
+
+        // Get API base URL based on current environment
+        getApiBase() {
+          // Check if we're on Render deployment
+          if (window.location.hostname.includes('render.com') || 
+              window.location.hostname.includes('obong-university')) {
+            return 'https://obong-university-src-election-admin-9x5w.onrender.com/api';
+          }
+          // Default to localhost
+          return '/api';
         }
 
         bindEvents() {
@@ -297,28 +344,50 @@
           loginLoading.style.display = "inline";
 
           try {
-            const response = await fetch(`${this.apiBase}/admin/login`, {
+            const apiBase = this.getApiBase();
+            console.log('Attempting login to:', apiBase);
+
+            const response = await fetch(`${apiBase}/admin/login`, {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
               },
+              credentials: "include",
               body: JSON.stringify({ username, password }),
             });
+
+            // Handle non-JSON responses
+            const contentType = response.headers.get("content-type");
+            if (!contentType || !contentType.includes("application/json")) {
+              throw new Error(`Server returned ${response.status}: ${response.statusText}. Expected JSON response.`);
+            }
 
             const data = await response.json();
 
             if (data.success) {
               this.showMessage(data.message, "success");
+              console.log('Login successful, redirecting to:', data.redirect);
+              
               // Redirect to admin dashboard
               setTimeout(() => {
-                window.location.href = data.redirect;
+                // Use the redirect URL from the response or construct it
+                const redirectUrl = data.redirect || '/admin_dashboard';
+                window.location.href = redirectUrl;
               }, 1000);
             } else {
-              this.showMessage(data.message, "error");
+              this.showMessage(data.message || 'Login failed. Please check your credentials.', "error");
             }
           } catch (error) {
             console.error("Login error:", error);
-            this.showMessage("Network error. Please try again.", "error");
+            
+            let errorMessage = "Network error. Please try again.";
+            if (error.message.includes('Failed to fetch')) {
+              errorMessage = "Cannot connect to server. Please check if the server is running.";
+            } else if (error.message.includes('Expected JSON response')) {
+              errorMessage = "Server returned an unexpected response. Please try again.";
+            }
+            
+            this.showMessage(errorMessage, "error");
           } finally {
             // Reset loading state
             loginBtn.disabled = false;
@@ -357,6 +426,12 @@
       // Initialize the application
       document.addEventListener("DOMContentLoaded", () => {
         new AdminAuth();
+        
+        // Auto-fill credentials for easier testing (remove in production)
+        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+          document.getElementById('username').value = 'admin';
+          document.getElementById('password').value = 'obonguni2025';
+        }
       });
     </script>
   </body>
