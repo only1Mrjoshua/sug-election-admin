@@ -924,7 +924,7 @@
             <i class="fas fa-shield-alt"></i>
             ADMIN ACCESS
           </div>
-          <a href="/api/admin/logout" class="logout-btn" id="logoutBtn">
+          <a href="#" class="logout-btn" id="logoutBtn">
             <i class="fas fa-sign-out-alt"></i>
             Logout
           </a>
@@ -1244,7 +1244,16 @@
     </div>
 
     <script>
-      const API_BASE = "/api";
+      // Dynamic API base URL for both localhost and Render
+      const getApiBase = () => {
+        // Check if we're on Render deployment
+        if (window.location.hostname.includes('render.com') || 
+            window.location.hostname.includes('obong-university')) {
+          return 'https://obong-university-src-election-admin-9x5w.onrender.com/api';
+        }
+        // Default to localhost
+        return '/api';
+      };
 
       // Mobile Menu Functionality
       const mobileMenuBtn = document.getElementById("mobileMenuBtn");
@@ -1330,6 +1339,27 @@
         .getElementById("refresh-voters")
         .addEventListener("click", loadVoters);
 
+      // Logout functionality
+      document.getElementById("logoutBtn").addEventListener("click", async (e) => {
+        e.preventDefault();
+        try {
+          const response = await fetch(getApiBase() + "/admin/logout", {
+            method: "POST",
+            credentials: "include"
+          });
+          
+          if (response.ok) {
+            window.location.href = "/";
+          } else {
+            // If logout fails, redirect to login page anyway
+            window.location.href = "/";
+          }
+        } catch (error) {
+          console.error("Logout error:", error);
+          window.location.href = "/";
+        }
+      });
+
       // Error handling function
       function handleError(context, error) {
         console.error(`Error in ${context}:`, error);
@@ -1363,7 +1393,9 @@
       // Load election status
       async function loadElectionStatus() {
         try {
-          const response = await fetch(API_BASE + "/election/status");
+          const response = await fetch(getApiBase() + "/election/status", {
+            credentials: "include"
+          });
           const result = await response.json();
 
           if (result.success) {
@@ -1390,7 +1422,9 @@
                     </div>
                 `;
 
-          const response = await fetch(API_BASE + "/results");
+          const response = await fetch(getApiBase() + "/results", {
+            credentials: "include"
+          });
 
           if (!response.ok) {
             throw new Error(
@@ -1537,7 +1571,9 @@
       // Load statistics
       async function loadStats() {
         try {
-          const response = await fetch(API_BASE + "/stats");
+          const response = await fetch(getApiBase() + "/stats", {
+            credentials: "include"
+          });
 
           if (!response.ok) {
             throw new Error(
@@ -1611,7 +1647,9 @@
                     </div>
                 `;
 
-          const response = await fetch(API_BASE + "/voters");
+          const response = await fetch(getApiBase() + "/voters", {
+            credentials: "include"
+          });
 
           if (!response.ok) {
             throw new Error(
@@ -1707,11 +1745,12 @@
       // Control election status
       async function controlElection(action) {
         try {
-          const response = await fetch(API_BASE + "/election/control", {
+          const response = await fetch(getApiBase() + "/election/control", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
             },
+            credentials: "include",
             body: JSON.stringify({ action: action }),
           });
 
@@ -1761,7 +1800,9 @@
       // Export data
       async function exportData() {
         try {
-          const response = await fetch(API_BASE + "/results");
+          const response = await fetch(getApiBase() + "/results", {
+            credentials: "include"
+          });
           const result = await response.json();
           
           if (result.success) {
