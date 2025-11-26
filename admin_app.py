@@ -872,6 +872,77 @@ def admin_home():
             color: var(--white);
         }}
         
+        /* Mobile Menu Styles */
+        .mobile-menu-btn {{
+            display: none;
+            background: transparent;
+            border: none;
+            font-size: 1.5rem;
+            color: var(--primary-red);
+            cursor: pointer;
+            padding: 10px;
+            border-radius: 8px;
+            transition: var(--transition);
+        }}
+        
+        .mobile-menu-btn:hover {{
+            background: var(--light-red);
+        }}
+        
+        .mobile-overlay {{
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 998;
+        }}
+        
+        .mobile-sidebar {{
+            display: none;
+            position: fixed;
+            top: 0;
+            right: -300px;
+            width: 280px;
+            height: 100%;
+            background: var(--white);
+            box-shadow: -5px 0 15px rgba(0, 0, 0, 0.1);
+            z-index: 999;
+            transition: var(--transition);
+            padding: 20px;
+            overflow-y: auto;
+        }}
+        
+        .mobile-sidebar.active {{
+            right: 0;
+        }}
+        
+        .mobile-sidebar-header {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid var(--light-gray);
+        }}
+        
+        .mobile-sidebar-close {{
+            background: transparent;
+            border: none;
+            font-size: 1.5rem;
+            color: var(--primary-red);
+            cursor: pointer;
+            padding: 5px;
+            border-radius: 5px;
+            transition: var(--transition);
+        }}
+        
+        .mobile-sidebar-close:hover {{
+            background: var(--light-red);
+        }}
+        
         .main-content {{
             display: grid;
             grid-template-columns: 280px 1fr;
@@ -1346,46 +1417,101 @@ def admin_home():
             opacity: 0.5;
         }}
         
-        /* Responsive Design */
+        /* Mobile Responsive Design */
         @media (max-width: 1024px) {{
             .main-content {{
                 grid-template-columns: 1fr;
             }}
             
             .sidebar {{
-                position: static;
-                margin-bottom: 0;
+                display: none;
             }}
             
-            .nav-items {{
-                display: flex;
-                overflow-x: auto;
-                gap: 10px;
-                padding-bottom: 10px;
+            .mobile-menu-btn {{
+                display: block;
             }}
             
-            .nav-item {{
-                white-space: nowrap;
-                margin-bottom: 0;
+            .mobile-sidebar {{
+                display: block;
+            }}
+            
+            .mobile-overlay {{
+                display: block;
+            }}
+            
+            .header {{
+                padding: 20px;
+            }}
+            
+            .admin-section {{
+                gap: 15px;
+            }}
+            
+            .election-status {{
+                padding: 8px 16px;
+                font-size: 0.8rem;
+            }}
+            
+            .admin-badge {{
+                padding: 10px 18px;
+                font-size: 0.9rem;
+            }}
+            
+            .logout-btn {{
+                padding: 8px 16px;
+                font-size: 0.9rem;
             }}
         }}
         
         @media (max-width: 768px) {{
+            body {{
+                padding: 10px;
+            }}
+            
             .header {{
                 flex-direction: column;
                 text-align: center;
                 gap: 20px;
+                padding: 20px 15px;
             }}
             
             .admin-section {{
                 flex-direction: column;
                 gap: 15px;
+                width: 100%;
+            }}
+            
+            .election-status, .admin-badge, .logout-btn {{
+                width: 100%;
+                justify-content: center;
+            }}
+            
+            .content-area {{
+                padding: 20px;
+                border-radius: 10px;
             }}
             
             .page-header {{
                 flex-direction: column;
                 align-items: flex-start;
                 gap: 15px;
+            }}
+            
+            .page-title {{
+                font-size: 1.5rem;
+            }}
+            
+            .stats-grid {{
+                grid-template-columns: 1fr;
+                gap: 15px;
+            }}
+            
+            .stat-card {{
+                padding: 20px;
+            }}
+            
+            .stat-number {{
+                font-size: 2.2rem;
             }}
             
             .candidate-card {{
@@ -1405,26 +1531,121 @@ def admin_home():
                 gap: 15px;
             }}
             
-            .stats-grid {{
+            .system-status {{
                 grid-template-columns: 1fr;
+            }}
+            
+            .position-card {{
+                padding: 20px;
+            }}
+            
+            .position-header {{
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }}
+            
+            .position-title {{
+                font-size: 1.3rem;
             }}
         }}
         
         @media (max-width: 480px) {{
             .container {{
-                padding: 10px;
+                padding: 0;
             }}
             
             .header {{
-                padding: 20px;
+                border-radius: 0;
+                margin-bottom: 0;
+            }}
+            
+            .content-area {{
+                border-radius: 0;
+                padding: 15px;
             }}
             
             .university-info h1 {{
                 font-size: 1.8rem;
             }}
             
-            .content-area {{
+            .page-title {{
+                font-size: 1.3rem;
+            }}
+            
+            .btn {{
+                padding: 12px 20px;
+                font-size: 14px;
+                width: 100%;
+                justify-content: center;
+            }}
+            
+            .page-header {{
+                flex-direction: column;
+                gap: 15px;
+            }}
+            
+            .mobile-sidebar {{
+                width: 100%;
+                right: -100%;
+            }}
+            
+            .mobile-sidebar.active {{
+                right: 0;
+            }}
+            
+            .nav-item {{
                 padding: 20px;
+                font-size: 1.1rem;
+            }}
+            
+            .alert {{
+                padding: 15px;
+                flex-direction: column;
+                text-align: center;
+                gap: 10px;
+            }}
+            
+            .voter-card {{
+                padding: 15px;
+            }}
+            
+            .voter-details {{
+                font-size: 0.8rem;
+            }}
+            
+            .candidate-card {{
+                padding: 15px;
+            }}
+            
+            .candidate-name {{
+                font-size: 1.1rem;
+            }}
+        }}
+        
+        @media (max-width: 360px) {{
+            .university-info h1 {{
+                font-size: 1.5rem;
+            }}
+            
+            .university-info .subtitle {{
+                font-size: 1rem;
+            }}
+            
+            .content-area {{
+                padding: 10px;
+            }}
+            
+            .stat-card {{
+                padding: 15px;
+            }}
+            
+            .stat-number {{
+                font-size: 1.8rem;
+            }}
+            
+            .position-card {{
+                padding: 15px;
             }}
         }}
     </style>
@@ -1449,10 +1670,45 @@ def admin_home():
                     <i class="fas fa-sign-out-alt"></i>
                     Logout
                 </a>
+                <button class="mobile-menu-btn" id="mobileMenuBtn">
+                    <i class="fas fa-bars"></i>
+                </button>
+            </div>
+        </div>
+        
+        <!-- Mobile Overlay -->
+        <div class="mobile-overlay" id="mobileOverlay"></div>
+        
+        <!-- Mobile Sidebar -->
+        <div class="mobile-sidebar" id="mobileSidebar">
+            <div class="mobile-sidebar-header">
+                <h3>Navigation Menu</h3>
+                <button class="mobile-sidebar-close" id="mobileSidebarClose">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="nav-items">
+                <div class="nav-item active" data-tab="results">
+                    <i class="fas fa-chart-bar"></i>
+                    Live Results
+                </div>
+                <div class="nav-item" data-tab="dashboard">
+                    <i class="fas fa-tachometer-alt"></i>
+                    Election Dashboard
+                </div>
+                <div class="nav-item" data-tab="voters">
+                    <i class="fas fa-users"></i>
+                    Registered Voters
+                </div>
+                <div class="nav-item" data-tab="settings">
+                    <i class="fas fa-cog"></i>
+                    System Settings
+                </div>
             </div>
         </div>
         
         <div class="main-content">
+            <!-- Desktop Sidebar -->
             <div class="sidebar">
                 <div class="nav-items">
                     <div class="nav-item active" data-tab="results">
@@ -1692,34 +1948,74 @@ def admin_home():
     <script>
         const API_BASE = '/api';
         
-        // Tab navigation
-        document.querySelectorAll('.nav-item').forEach(item => {{
+        // Mobile Menu Functionality
+        const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+        const mobileSidebar = document.getElementById('mobileSidebar');
+        const mobileSidebarClose = document.getElementById('mobileSidebarClose');
+        const mobileOverlay = document.getElementById('mobileOverlay');
+        
+        function openMobileMenu() {{
+            mobileSidebar.classList.add('active');
+            mobileOverlay.style.display = 'block';
+            document.body.style.overflow = 'hidden';
+        }}
+        
+        function closeMobileMenu() {{
+            mobileSidebar.classList.remove('active');
+            mobileOverlay.style.display = 'none';
+            document.body.style.overflow = 'auto';
+        }}
+        
+        mobileMenuBtn.addEventListener('click', openMobileMenu);
+        mobileSidebarClose.addEventListener('click', closeMobileMenu);
+        mobileOverlay.addEventListener('click', closeMobileMenu);
+        
+        // Close mobile menu when clicking on nav items
+        document.querySelectorAll('.mobile-sidebar .nav-item').forEach(item => {{
+            item.addEventListener('click', () => {{
+                closeMobileMenu();
+                // Also trigger the tab change
+                const tab = item.getAttribute('data-tab');
+                switchTab(tab);
+            }});
+        }});
+        
+        // Tab navigation function
+        function switchTab(tabName) {{
+            // Remove active class from all items
+            document.querySelectorAll('.nav-item').forEach(nav => {{
+                nav.classList.remove('active');
+            }});
+            
+            // Add active class to clicked item
+            document.querySelectorAll(`.nav-item[data-tab="${{tabName}}"]`).forEach(nav => {{
+                nav.classList.add('active');
+            }});
+            
+            // Hide all tab content
+            document.querySelectorAll('.tab-content').forEach(tab => {{
+                tab.classList.remove('active');
+            }});
+            
+            // Show selected tab content
+            const tabId = tabName + '-tab';
+            document.getElementById(tabId).classList.add('active');
+            
+            // Load data for specific tabs
+            if (tabName === 'results') {{
+                loadResults();
+            }} else if (tabName === 'dashboard') {{
+                loadStats();
+            }} else if (tabName === 'voters') {{
+                loadVoters();
+            }}
+        }}
+        
+        // Tab navigation for desktop
+        document.querySelectorAll('.sidebar .nav-item').forEach(item => {{
             item.addEventListener('click', function() {{
-                // Remove active class from all items
-                document.querySelectorAll('.nav-item').forEach(nav => {{
-                    nav.classList.remove('active');
-                }});
-                
-                // Add active class to clicked item
-                this.classList.add('active');
-                
-                // Hide all tab content
-                document.querySelectorAll('.tab-content').forEach(tab => {{
-                    tab.classList.remove('active');
-                }});
-                
-                // Show selected tab content
-                const tabId = this.getAttribute('data-tab') + '-tab';
-                document.getElementById(tabId).classList.add('active');
-                
-                // Load data for specific tabs
-                if (this.getAttribute('data-tab') === 'results') {{
-                    loadResults();
-                }} else if (this.getAttribute('data-tab') === 'dashboard') {{
-                    loadStats();
-                }} else if (this.getAttribute('data-tab') === 'voters') {{
-                    loadVoters();
-                }}
+                const tabName = this.getAttribute('data-tab');
+                switchTab(tabName);
             }});
         }});
         
