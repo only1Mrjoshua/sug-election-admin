@@ -209,8 +209,9 @@
         ADMIN LOGIN
       </div>
 
-      {% with messages = get_flashed_messages(with_categories=true) %} {% if
-      messages %} {% for category, message in messages %}
+      {% with messages = get_flashed_messages(with_categories=true) %} 
+        {% if messages %} 
+          {% for category, message in messages %}
       <div
         class="alert alert-{{ 'error' if category == 'error' else 'success' }}"
       >
