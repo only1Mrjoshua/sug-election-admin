@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template, send_from_directory
+from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from pymongo import MongoClient
@@ -6,39 +6,85 @@ from bson.objectid import ObjectId
 from datetime import datetime
 import bcrypt
 import os
+import urllib.parse
+import logging
+from functools import wraps
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__, template_folder='templates')
 app.secret_key = 'iauweiyvbiueyckuahsfdyrstvdKYWRIURIVTABSDFHCDVJQWT2648hfjbs'
-# Update your CORS configuration in Flask
+
+# Enhanced CORS configuration
 CORS(app, 
      origins=[
          "https://obong-university-src-election-admin-9x5w.onrender.com",
          "https://obong-university-src-election-admin.onrender.com",
          "http://localhost:5000", 
-         "http://127.0.0.1:5000"
+         "http://127.0.0.1:5000",
+         "http://localhost:3000",
+         "http://127.0.0.1:3000"
      ],
      supports_credentials=True,
      methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-     allow_headers=["Content-Type", "Authorization"])
+     allow_headers=["Content-Type", "Authorization", "X-Requested-With"])
 
-# MongoDB configuration
-MONGO_URI = "mongodb+srv://only1MrJoshua:LovuLord2025@cluster0.9jqnavg.mongodb.net/election_db?retryWrites=true&w=majority"
+# MongoDB configuration with proper password encoding
+username = "only1MrJoshua"
+password = "LovuLord2025"
+encoded_password = urllib.parse.quote_plus(password)
+
+MONGO_URI = f"mongodb+srv://{username}:{encoded_password}@cluster0.9jqnavg.mongodb.net/election_db?retryWrites=true&w=majority&socketTimeoutMS=30000&connectTimeoutMS=30000&serverSelectionTimeoutMS=30000"
 DATABASE_NAME = "election_db"
 
-# Initialize MongoDB
+# Initialize MongoDB with connection pooling
 try:
-    client = MongoClient(MONGO_URI)
+    client = MongoClient(
+        MONGO_URI,
+        maxPoolSize=50,
+        retryWrites=True,
+        retryReads=True
+    )
+    # Test connection with timeout
+    client.admin.command('ping', maxTimeMS=30000)
     db = client[DATABASE_NAME]
-    client.admin.command('ping')
-    print("✅ MongoDB connection successful!")
+    logger.info("✅ MongoDB connection successful!")
 except Exception as e:
-    print(f"❌ MongoDB connection failed: {e}")
-    exit(1)
+    logger.error(f"❌ MongoDB connection failed: {e}")
+    db = None
 
 # Initialize Flask-Login
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'serve_login'
+
+# Custom JSON login required decorator for APIs
+def api_login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated:
+            return jsonify({
+                'success': False,
+                'message': 'Authentication required. Please log in.',
+                'login_required': True
+            }), 401
+        return f(*args, **kwargs)
+    return decorated_function
+
+# Override Flask-Login's unauthorized handler to return JSON instead of redirect
+@login_manager.unauthorized_handler
+def unauthorized():
+    # If it's an API request, return JSON error
+    if request.path.startswith('/api/'):
+        return jsonify({
+            'success': False,
+            'message': 'Authentication required',
+            'login_required': True
+        }), 401
+    # For regular pages, redirect to login
+    return redirect(url_for('serve_login'))
 
 # Admin credentials
 ADMIN_USERNAME = "admin"
@@ -87,6 +133,7 @@ VALID_MATRIC_NUMBERS = {
 def init_db():
     """Initialize database with sample data"""
     try:
+        # Your existing init_db code remains the same
         current_voter_indexes = list(voters_collection.list_indexes())
         for index in current_voter_indexes:
             index_name = index['name']
@@ -231,11 +278,11 @@ def serve_login():
 
 # Serve the admin dashboard
 @app.route('/admin_dashboard')
-@login_required
+@login_required  # Keep this for page routes
 def serve_admin_dashboard():
     return render_template('admin_dashboard.html')
 
-# API Routes
+# API Routes - USE api_login_required INSTEAD OF login_required
 @app.route('/api/admin/login', methods=['POST'])
 def admin_login():
     """Admin login API"""
@@ -258,7 +305,7 @@ def admin_login():
         }), 401
 
 @app.route('/api/admin/logout', methods=['POST'])
-@login_required
+@api_login_required  # Use custom decorator
 def admin_logout():
     """Admin logout API"""
     logout_user()
@@ -269,7 +316,7 @@ def admin_logout():
     })
 
 @app.route('/api/stats', methods=['GET'])
-@login_required
+@api_login_required  # Use custom decorator
 def get_stats():
     """Get election statistics"""
     try:
@@ -294,7 +341,7 @@ def get_stats():
         }), 500
 
 @app.route('/api/results', methods=['GET'])
-@login_required
+@api_login_required  # Use custom decorator
 def get_results():
     """Get election results"""
     try:
@@ -338,7 +385,7 @@ def get_results():
         }), 500
 
 @app.route('/api/voters', methods=['GET'])
-@login_required
+@api_login_required  # Use custom decorator
 def get_voters():
     """Get list of all registered voters"""
     try:
@@ -364,7 +411,7 @@ def get_voters():
         }), 500
 
 @app.route('/api/election/control', methods=['POST'])
-@login_required
+@api_login_required  # Use custom decorator
 def control_election():
     """Control election status (start, pause, end, reset)"""
     try:
@@ -433,16 +480,8 @@ def control_election():
             'message': f'Error controlling election: {str(e)}'
         }), 500
 
-@app.route('/api/health')
-def health_check():
-    return jsonify({
-        'status': 'healthy',
-        'message': 'Server is running',
-        'timestamp': datetime.utcnow().isoformat()
-    })
-
 @app.route('/api/election/status', methods=['GET'])
-@login_required
+@api_login_required  # Use custom decorator
 def get_election_status():
     """Get current election status"""
     try:
@@ -470,6 +509,14 @@ def get_election_status():
             'success': False,
             'message': f'Error fetching election status: {str(e)}'
         }), 500
+
+@app.route('/api/health')
+def health_check():
+    return jsonify({
+        'status': 'healthy',
+        'message': 'Server is running',
+        'timestamp': datetime.utcnow().isoformat()
+    })
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5002))
