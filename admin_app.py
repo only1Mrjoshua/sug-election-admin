@@ -227,7 +227,7 @@ def admin_login():
         return jsonify({
             'success': True,
             'message': 'Login successful',
-            'redirect': '/admin/dashboard'
+            'redirect': '/admin_dashboard'
         })
     else:
         return jsonify({
