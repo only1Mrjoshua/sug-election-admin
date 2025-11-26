@@ -272,7 +272,7 @@ def admin_login():
         else:
             flash('Invalid credentials. Please try again.', 'error')
     
-    return render_template('admin_login.html')
+    return render_template('index.html')
 
 @app.route('/admin/logout')
 @login_required
