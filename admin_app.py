@@ -9,9 +9,11 @@ import os
 
 app = Flask(__name__, template_folder='templates')
 app.secret_key = 'iauweiyvbiueyckuahsfdyrstvdKYWRIURIVTABSDFHCDVJQWT2648hfjbs'
+# Update your CORS configuration in Flask
 CORS(app, 
      origins=[
          "https://obong-university-src-election-admin-9x5w.onrender.com",
+         "https://obong-university-src-election-admin.onrender.com",
          "http://localhost:5000", 
          "http://127.0.0.1:5000"
      ],
