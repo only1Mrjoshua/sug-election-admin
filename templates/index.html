@@ -268,8 +268,8 @@
     <script>
       class AdminAuth {
         constructor() {
-          this.apiBase =
-            "https://obong-university-src-election-admin-9x5w.onrender.com/api";
+          // Auto-detect base URL for both localhost and Render
+          this.apiBase = window.location.origin + '/api';
           this.init();
         }
 

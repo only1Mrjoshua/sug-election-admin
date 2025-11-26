@@ -79,7 +79,7 @@
       }
 
       .election-status {
-          background: {{ status_color }};
+          background: var(--status-color, #666);
           color: var(--white);
           padding: 10px 20px;
           border-radius: 30px;
@@ -355,6 +355,12 @@
       .btn:hover {
           transform: translateY(-2px);
           box-shadow: 0 6px 12px rgba(209, 61, 57, 0.4);
+      }
+
+      .btn:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+          transform: none;
       }
 
       .btn-secondary {
@@ -910,15 +916,15 @@
           <div class="subtitle">Admin Dashboard - SRC Elections 2025</div>
         </div>
         <div class="admin-section">
-          <div class="election-status">
+          <div class="election-status" id="electionStatus">
             <i class="fas fa-circle"></i>
-            {{ election_status.replace('_', ' ').title() }}
+            Loading...
           </div>
           <div class="admin-badge">
             <i class="fas fa-shield-alt"></i>
             ADMIN ACCESS
           </div>
-          <a href="/admin/logout" class="logout-btn">
+          <a href="/api/admin/logout" class="logout-btn" id="logoutBtn">
             <i class="fas fa-sign-out-alt"></i>
             Logout
           </a>
@@ -1049,8 +1055,8 @@
                 <div class="stat-icon">
                   <i class="fas fa-check-circle"></i>
                 </div>
-                <div class="stat-number" id="verified-voters">0</div>
-                <div class="stat-label">Verified Voters</div>
+                <div class="stat-number" id="voted-count">0</div>
+                <div class="stat-label">Voters Who Voted</div>
               </div>
             </div>
 
@@ -1090,7 +1096,7 @@
               <div>
                 <h2 class="page-title">Registered Voters</h2>
                 <p class="page-description">
-                  List of all registered voters and their verification status.
+                  List of all registered voters and their voting status.
                 </p>
               </div>
               <button class="btn" id="refresh-voters">
@@ -1217,7 +1223,7 @@
                       View system activity and error logs
                     </div>
                   </div>
-                  <button class="btn">
+                  <button class="btn" onclick="viewLogs()">
                     <i class="fas fa-file-alt"></i>
                     View Logs
                   </button>
@@ -1354,6 +1360,22 @@
         }, 5000);
       }
 
+      // Load election status
+      async function loadElectionStatus() {
+        try {
+          const response = await fetch(API_BASE + "/election/status");
+          const result = await response.json();
+
+          if (result.success) {
+            const statusElement = document.getElementById("electionStatus");
+            statusElement.innerHTML = `<i class="fas fa-circle"></i> ${result.status.replace('_', ' ').toUpperCase()}`;
+            statusElement.style.backgroundColor = result.color;
+          }
+        } catch (error) {
+          console.error("Error loading election status:", error);
+        }
+      }
+
       // Load results
       async function loadResults() {
         const container = document.getElementById("results-container");
@@ -1435,6 +1457,7 @@
                                             }</div>
                                             <div class="candidate-department">${
                                               candidate.department ||
+                                              candidate.faculty ||
                                               "No department specified"
                                             }</div>
                                         </div>
@@ -1541,9 +1564,8 @@
                 : 0;
             document.getElementById("turnout-rate").textContent = turnout + "%";
 
-            document.getElementById("verified-voters").textContent =
-              result.stats.verified_voters ||
-              result.stats.total_registered_voters;
+            document.getElementById("voted-count").textContent =
+              result.stats.voted_count || 0;
             document.getElementById("last-update").textContent =
               new Date().toLocaleString();
 
@@ -1623,22 +1645,18 @@
               voterCard.className = "voter-card";
               voterCard.innerHTML = `
                             <div class="voter-info">
-                                <div class="voter-name">${voter.name}</div>
+                                <div class="voter-name">${voter.matric_number}</div>
                                 <div class="voter-details">
-                                    Matric: ${voter.matric_number} | Email: ${
-                voter.email
-              } | Faculty: ${voter.faculty || "Not specified"}
+                                    Registration Date: ${new Date(voter.registration_date).toLocaleDateString()}
                                 </div>
                             </div>
                             <div class="voter-status ${
-                              voter.location_verified
-                                ? "status-verified"
-                                : "status-pending"
+                              voter.has_voted ? "status-verified" : "status-pending"
                             }">
                                 ${
-                                  voter.location_verified
-                                    ? '<i class="fas fa-check-circle"></i> Verified'
-                                    : '<i class="fas fa-clock"></i> Pending'
+                                  voter.has_voted
+                                    ? '<i class="fas fa-check-circle"></i> Voted'
+                                    : '<i class="fas fa-clock"></i> Not Voted'
                                 }
                             </div>
                         `;
@@ -1721,10 +1739,17 @@
               alert.remove();
             }, 5000);
 
-            // Reload page to update status
-            setTimeout(() => {
-              window.location.reload();
-            }, 2000);
+            // Reload election status
+            loadElectionStatus();
+            
+            // Reload data if needed
+            if (action === 'reset') {
+              setTimeout(() => {
+                loadResults();
+                loadStats();
+                loadVoters();
+              }, 1000);
+            }
           } else {
             throw new Error(result.message || "Failed to control election");
           }
@@ -1736,43 +1761,72 @@
       // Export data
       async function exportData() {
         try {
-          const response = await fetch(API_BASE + "/export");
-          const blob = await response.blob();
-          const url = window.URL.createObjectURL(blob);
-          const a = document.createElement("a");
-          a.style.display = "none";
-          a.href = url;
-          a.download =
-            "election-data-" + new Date().toISOString().split("T")[0] + ".json";
-          document.body.appendChild(a);
-          a.click();
-          window.URL.revokeObjectURL(url);
+          const response = await fetch(API_BASE + "/results");
+          const result = await response.json();
+          
+          if (result.success) {
+            const dataStr = JSON.stringify(result.results, null, 2);
+            const dataBlob = new Blob([dataStr], {type: 'application/json'});
+            
+            const url = window.URL.createObjectURL(dataBlob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = `election-data-${new Date().toISOString().split('T')[0]}.json`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
 
-          // Show success message
-          const alert = document.createElement("div");
-          alert.className = "alert alert-success";
-          alert.innerHTML = `
-                    <i class="fas fa-check-circle"></i>
-                    <div>
-                        <strong>Export Successful</strong>
-                        <p>Election data has been downloaded.</p>
-                    </div>
-                `;
+            // Show success message
+            const alert = document.createElement("div");
+            alert.className = "alert alert-success";
+            alert.innerHTML = `
+                        <i class="fas fa-check-circle"></i>
+                        <div>
+                            <strong>Export Successful</strong>
+                            <p>Election data has been downloaded.</p>
+                        </div>
+                    `;
 
-          const currentTab = document.querySelector(".tab-content.active");
-          currentTab.insertBefore(alert, currentTab.firstChild);
+            const currentTab = document.querySelector(".tab-content.active");
+            currentTab.insertBefore(alert, currentTab.firstChild);
 
-          // Remove alert after 5 seconds
-          setTimeout(() => {
-            alert.remove();
-          }, 5000);
+            // Remove alert after 5 seconds
+            setTimeout(() => {
+              alert.remove();
+            }, 5000);
+          } else {
+            throw new Error(result.message || "Failed to export data");
+          }
         } catch (error) {
           handleError("exportData", error);
         }
       }
 
+      // View logs (placeholder function)
+      function viewLogs() {
+        const alert = document.createElement("div");
+        alert.className = "alert alert-warning";
+        alert.innerHTML = `
+          <i class="fas fa-info-circle"></i>
+          <div>
+            <strong>Log Viewer</strong>
+            <p>Log viewing functionality will be implemented in a future update.</p>
+          </div>
+        `;
+
+        const currentTab = document.querySelector(".tab-content.active");
+        currentTab.insertBefore(alert, currentTab.firstChild);
+
+        // Remove alert after 5 seconds
+        setTimeout(() => {
+          alert.remove();
+        }, 5000);
+      }
+
       // Initialize the page
       document.addEventListener("DOMContentLoaded", () => {
+        loadElectionStatus();
         loadResults();
         loadStats();
 

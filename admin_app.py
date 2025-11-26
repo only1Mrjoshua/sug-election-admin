@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template, send_from_directory
 from flask_cors import CORS
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from pymongo import MongoClient
@@ -7,7 +7,7 @@ from datetime import datetime
 import bcrypt
 import os
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder='templates')
 app.secret_key = 'iauweiyvbiueyckuahsfdyrstvdKYWRIURIVTABSDFHCDVJQWT2648hfjbs'
 CORS(app)  # Enable CORS for all routes
 
@@ -28,6 +28,7 @@ except Exception as e:
 # Initialize Flask-Login
 login_manager = LoginManager()
 login_manager.init_app(app)
+login_manager.login_view = 'serve_login'
 
 # Admin credentials
 ADMIN_USERNAME = "admin"
@@ -213,6 +214,17 @@ def init_db():
 # Initialize database
 init_db()
 
+# Serve the login page
+@app.route('/')
+def serve_login():
+    return render_template('index.html')
+
+# Serve the admin dashboard
+@app.route('/admin_dashboard')
+@login_required
+def serve_admin_dashboard():
+    return render_template('admin_dashboard.html')
+
 # API Routes
 @app.route('/api/admin/login', methods=['POST'])
 def admin_login():
@@ -242,7 +254,8 @@ def admin_logout():
     logout_user()
     return jsonify({
         'success': True,
-        'message': 'You have been logged out successfully.'
+        'message': 'You have been logged out successfully.',
+        'redirect': '/'
     })
 
 @app.route('/api/stats', methods=['GET'])
