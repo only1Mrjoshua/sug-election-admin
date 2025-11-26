@@ -158,6 +158,12 @@
         box-shadow: 0 6px 12px rgba(209, 61, 57, 0.4);
       }
 
+      .btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        transform: none;
+      }
+
       .alert {
         padding: 15px 20px;
         border-radius: var(--radius);
@@ -186,6 +192,11 @@
         font-size: 0.9rem;
       }
 
+      .loading {
+        opacity: 0.7;
+        pointer-events: none;
+      }
+
       @media (max-width: 480px) {
         .login-container {
           padding: 30px 20px;
@@ -209,20 +220,9 @@
         ADMIN LOGIN
       </div>
 
-      {% with messages = get_flashed_messages(with_categories=true) %} 
-        {% if messages %} 
-          {% for category, message in messages %}
-      <div
-        class="alert alert-{{ 'error' if category == 'error' else 'success' }}"
-      >
-        <i
-          class="fas fa-{{ 'exclamation-circle' if category == 'error' else 'check-circle' }}"
-        ></i>
-        {{ message }}
-      </div>
-      {% endfor %} {% endif %} {% endwith %}
+      <div id="messageContainer"></div>
 
-      <form method="POST">
+      <form id="loginForm">
         <div class="form-group">
           <label for="username">Username</label>
           <div class="input-group">
@@ -251,9 +251,12 @@
           </div>
         </div>
 
-        <button type="submit" class="btn">
+        <button type="submit" class="btn" id="loginBtn">
           <i class="fas fa-sign-in-alt"></i>
-          Login to Dashboard
+          <span id="loginText">Login to Dashboard</span>
+          <span id="loginLoading" style="display: none">
+            <i class="fas fa-spinner fa-spin"></i> Logging in...
+          </span>
         </button>
       </form>
 
@@ -261,5 +264,99 @@
         <p>For authorized personnel only</p>
       </div>
     </div>
+
+    <script>
+      class AdminAuth {
+        constructor() {
+          this.apiBase = "/api";
+          this.init();
+        }
+
+        init() {
+          this.bindEvents();
+        }
+
+        bindEvents() {
+          const loginForm = document.getElementById("loginForm");
+          loginForm.addEventListener("submit", (e) => this.handleLogin(e));
+        }
+
+        async handleLogin(e) {
+          e.preventDefault();
+
+          const username = document.getElementById("username").value;
+          const password = document.getElementById("password").value;
+          const loginBtn = document.getElementById("loginBtn");
+          const loginText = document.getElementById("loginText");
+          const loginLoading = document.getElementById("loginLoading");
+
+          // Show loading state
+          loginBtn.disabled = true;
+          loginText.style.display = "none";
+          loginLoading.style.display = "inline";
+
+          try {
+            const response = await fetch(`${this.apiBase}/admin/login`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ username, password }),
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+              this.showMessage(data.message, "success");
+              // Redirect to admin dashboard
+              setTimeout(() => {
+                window.location.href = data.redirect;
+              }, 1000);
+            } else {
+              this.showMessage(data.message, "error");
+            }
+          } catch (error) {
+            console.error("Login error:", error);
+            this.showMessage("Network error. Please try again.", "error");
+          } finally {
+            // Reset loading state
+            loginBtn.disabled = false;
+            loginText.style.display = "inline";
+            loginLoading.style.display = "none";
+          }
+        }
+
+        showMessage(message, type) {
+          const messageContainer = document.getElementById("messageContainer");
+
+          // Clear existing messages
+          messageContainer.innerHTML = "";
+
+          const alertDiv = document.createElement("div");
+          alertDiv.className = `alert alert-${type}`;
+
+          const iconClass =
+            type === "error" ? "exclamation-circle" : "check-circle";
+          alertDiv.innerHTML = `
+            <i class="fas fa-${iconClass}"></i>
+            <span>${message}</span>
+          `;
+
+          messageContainer.appendChild(alertDiv);
+
+          // Auto-remove success messages after 3 seconds
+          if (type === "success") {
+            setTimeout(() => {
+              alertDiv.remove();
+            }, 3000);
+          }
+        }
+      }
+
+      // Initialize the application
+      document.addEventListener("DOMContentLoaded", () => {
+        new AdminAuth();
+      });
+    </script>
   </body>
 </html>
