@@ -362,8 +362,15 @@
             });
 
             console.log("Response status:", response.status);
+            console.log(
+              "Response headers:",
+              Object.fromEntries(response.headers.entries())
+            );
 
-            // FIXED: Check content type before reading response
+            // FIXED: Clone response first to handle multiple reads
+            const responseClone = response.clone();
+
+            // Check content type before reading response
             const contentType = response.headers.get("content-type");
             let data;
 
@@ -371,13 +378,18 @@
               data = await response.json();
             } else {
               // If not JSON, read as text for debugging
-              const textResponse = await response.text();
+              const textResponse = await responseClone.text();
               console.error(
                 "Non-JSON response received:",
-                textResponse.substring(0, 200)
+                textResponse.substring(0, 500)
               );
 
-              if (response.status === 200) {
+              // Handle empty response
+              if (response.status === 200 && textResponse.trim() === "") {
+                throw new Error(
+                  "Server returned empty response. This usually means there's a server-side error or the API endpoint is not properly configured."
+                );
+              } else if (response.status === 200) {
                 throw new Error(
                   "Server returned HTML instead of JSON. This usually means the API route is not configured correctly."
                 );
@@ -413,9 +425,15 @@
             } else if (error.message.includes("HTML instead of JSON")) {
               errorMessage =
                 "Server configuration error. The login API is not returning proper JSON data.";
+            } else if (error.message.includes("empty response")) {
+              errorMessage =
+                "Server returned empty response. Please check server logs for errors.";
             } else if (error.message.includes("NetworkError")) {
               errorMessage =
                 "Network error. Please check your internet connection.";
+            } else if (error.message.includes("CORS")) {
+              errorMessage =
+                "Cross-origin request blocked. Please check server CORS configuration.";
             } else {
               errorMessage = error.message;
             }

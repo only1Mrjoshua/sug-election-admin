@@ -14,7 +14,7 @@ from functools import wraps
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = Flask(__name__, template_folder='templates')
+app = Flask(__name__, template_folder='templates', static_folder='static')
 app.secret_key = 'iauweiyvbiueyckuahsfdyrstvdKYWRIURIVTABSDFHCDVJQWT2648hfjbs'
 
 # Enhanced CORS configuration
@@ -102,11 +102,12 @@ def load_user(username):
         return User(username)
     return None
 
-# Collections
-voters_collection = db['voters']
-candidates_collection = db['candidates']
-votes_collection = db['votes']
-election_settings_collection = db['election_settings']
+# Initialize collections safely
+def get_collection(collection_name):
+    """Safely get collection reference"""
+    if db is None:
+        raise Exception("Database not connected")
+    return db[collection_name]
 
 # Valid matric numbers database
 VALID_MATRIC_NUMBERS = {
@@ -135,140 +136,150 @@ VALID_MATRIC_NUMBERS = {
 def init_db():
     """Initialize database with sample data"""
     try:
-        # Your existing init_db code remains the same
-        current_voter_indexes = list(voters_collection.list_indexes())
-        for index in current_voter_indexes:
-            index_name = index['name']
-            if index_name == 'email_1':
-                voters_collection.drop_index('email_1')
-        
-        current_vote_indexes = list(votes_collection.list_indexes())
-        for index in current_vote_indexes:
-            index_name = index['name']
-            if index_name == 'voter_id_1' and index.get('unique', False):
-                votes_collection.drop_index('voter_id_1')
-    except Exception as e:
-        print(f"ℹ️  Index cleanup: {e}")
+        if db is None:
+            logger.error("Database not connected - cannot initialize")
+            return
+            
+        voters_collection = get_collection('voters')
+        candidates_collection = get_collection('candidates')
+        votes_collection = get_collection('votes')
+        election_settings_collection = get_collection('election_settings')
 
-    indexes_to_create = [
-        (voters_collection, "matric_number", True),
-        (votes_collection, "candidate_id", False),
-        (votes_collection, [("voter_id", 1), ("candidate_position", 1)], True),
-    ]
-    
-    for collection, field, unique in indexes_to_create:
+        # Clean up existing indexes
         try:
-            if isinstance(field, list):
-                collection.create_index(field, unique=unique, name="unique_vote_per_position")
-            else:
-                if unique:
-                    collection.create_index(field, unique=True)
-                else:
-                    collection.create_index(field)
-            print(f"✅ Created index for {field}")
+            current_voter_indexes = list(voters_collection.list_indexes())
+            for index in current_voter_indexes:
+                index_name = index['name']
+                if index_name == 'email_1':
+                    voters_collection.drop_index('email_1')
         except Exception as e:
-            print(f"⚠️  Index warning for {field}: {e}")
+            logger.info(f"Index cleanup: {e}")
 
-    if election_settings_collection.count_documents({}) == 0:
-        election_settings_collection.insert_one({
-            'election_status': 'not_started',
-            'start_time': None,
-            'end_time': None,
-            'updated_at': datetime.utcnow()
-        })
-        print("✅ Election settings initialized")
-
-    if candidates_collection.count_documents({}) == 0:
-        real_candidates = [
-            {
-                "name": "Olukunle Tomiwa Covenant",
-                "position": "President",
-                "faculty": "Natural and Applied Science",
-                "created_at": datetime.utcnow()
-            },
-            {
-                "name": "Kennedy Solomon", 
-                "position": "President",
-                "faculty": "Natural and Applied Science",
-                "created_at": datetime.utcnow()
-            },
-            {
-                "name": "Jeremiah Gideon Emmanuel",
-                "position": "President",
-                "faculty": "Natural and Applied Science",
-                "created_at": datetime.utcnow()
-            },
-            {
-                "name": "Onwuoha Confidence Daberechi",
-                "position": "Vice President",
-                "faculty": "Natural and Applied Science",
-                "created_at": datetime.utcnow()
-            },
-            {
-                "name": "Babade Beatrice Jonathan",
-                "position": "Vice President",
-                "faculty": "Arts and Communications",
-                "created_at": datetime.utcnow()
-            },
-            {
-                "name": "Dimkpa Raymond Baribeebi",
-                "position": "Financial Secretary",
-                "faculty": "Natural and Applied Science",
-                "created_at": datetime.utcnow()
-            },
-            {
-                "name": "Mbang Donnoble Godwin",
-                "position": "Director of Transport",
-                "faculty": "Natural and Applied Science",
-                "created_at": datetime.utcnow()
-            },
-            {
-                "name": "Olukunle Titilola Oyindamola",
-                "position": "Director of Socials",
-                "faculty": "Management Science",
-                "created_at": datetime.utcnow()
-            },
-            {
-                "name": "Alasy Clinton Ebubechukwu",
-                "position": "Director of Socials",
-                "faculty": "Management Science",
-                "created_at": datetime.utcnow()
-            },
-            {
-                "name": "Collins Jacob",
-                "position": "Director of Sports",
-                "faculty": "Natural and Applied Science",
-                "created_at": datetime.utcnow()
-            },
-            {
-                "name": "Chisom Ejims",
-                "position": "Director of Sports",
-                "faculty": "Management Science",
-                "created_at": datetime.utcnow()
-            },
-            {
-                "name": "Davidson Lawrence",
-                "position": "Director of Sports",
-                "faculty": "Natural and Applied Science",
-                "created_at": datetime.utcnow()
-            },
-            {
-                "name": "Meshach Efioke",
-                "position": "Director of Information",
-                "faculty": "Natural and Applied Science",
-                "created_at": datetime.utcnow()
-            },
-            {
-                "name": "Abraham Raymond",
-                "position": "Student Chaplain",
-                "faculty": "Natural and Applied Science",
-                "created_at": datetime.utcnow()
-            }
+        # Create indexes
+        indexes_to_create = [
+            (voters_collection, "matric_number", True),
+            (votes_collection, "candidate_id", False),
+            (votes_collection, [("voter_id", 1), ("candidate_position", 1)], True),
         ]
-        candidates_collection.insert_many(real_candidates)
-        print("✅ REAL candidates added to MongoDB")
-    else:
-        print("✅ Candidates already exist in database")
+        
+        for collection, field, unique in indexes_to_create:
+            try:
+                if isinstance(field, list):
+                    collection.create_index(field, unique=unique, name="unique_vote_per_position")
+                else:
+                    if unique:
+                        collection.create_index(field, unique=True)
+                    else:
+                        collection.create_index(field)
+                logger.info(f"✅ Created index for {field}")
+            except Exception as e:
+                logger.warning(f"⚠️  Index warning for {field}: {e}")
+
+        # Initialize election settings
+        if election_settings_collection.count_documents({}) == 0:
+            election_settings_collection.insert_one({
+                'election_status': 'not_started',
+                'start_time': None,
+                'end_time': None,
+                'updated_at': datetime.utcnow()
+            })
+            logger.info("✅ Election settings initialized")
+
+        # Initialize candidates
+        if candidates_collection.count_documents({}) == 0:
+            real_candidates = [
+                {
+                    "name": "Olukunle Tomiwa Covenant",
+                    "position": "President",
+                    "faculty": "Natural and Applied Science",
+                    "created_at": datetime.utcnow()
+                },
+                {
+                    "name": "Kennedy Solomon", 
+                    "position": "President",
+                    "faculty": "Natural and Applied Science",
+                    "created_at": datetime.utcnow()
+                },
+                {
+                    "name": "Jeremiah Gideon Emmanuel",
+                    "position": "President",
+                    "faculty": "Natural and Applied Science",
+                    "created_at": datetime.utcnow()
+                },
+                {
+                    "name": "Onwuoha Confidence Daberechi",
+                    "position": "Vice President",
+                    "faculty": "Natural and Applied Science",
+                    "created_at": datetime.utcnow()
+                },
+                {
+                    "name": "Babade Beatrice Jonathan",
+                    "position": "Vice President",
+                    "faculty": "Arts and Communications",
+                    "created_at": datetime.utcnow()
+                },
+                {
+                    "name": "Dimkpa Raymond Baribeebi",
+                    "position": "Financial Secretary",
+                    "faculty": "Natural and Applied Science",
+                    "created_at": datetime.utcnow()
+                },
+                {
+                    "name": "Mbang Donnoble Godwin",
+                    "position": "Director of Transport",
+                    "faculty": "Natural and Applied Science",
+                    "created_at": datetime.utcnow()
+                },
+                {
+                    "name": "Olukunle Titilola Oyindamola",
+                    "position": "Director of Socials",
+                    "faculty": "Management Science",
+                    "created_at": datetime.utcnow()
+                },
+                {
+                    "name": "Alasy Clinton Ebubechukwu",
+                    "position": "Director of Socials",
+                    "faculty": "Management Science",
+                    "created_at": datetime.utcnow()
+                },
+                {
+                    "name": "Collins Jacob",
+                    "position": "Director of Sports",
+                    "faculty": "Natural and Applied Science",
+                    "created_at": datetime.utcnow()
+                },
+                {
+                    "name": "Chisom Ejims",
+                    "position": "Director of Sports",
+                    "faculty": "Management Science",
+                    "created_at": datetime.utcnow()
+                },
+                {
+                    "name": "Davidson Lawrence",
+                    "position": "Director of Sports",
+                    "faculty": "Natural and Applied Science",
+                    "created_at": datetime.utcnow()
+                },
+                {
+                    "name": "Meshach Efioke",
+                    "position": "Director of Information",
+                    "faculty": "Natural and Applied Science",
+                    "created_at": datetime.utcnow()
+                },
+                {
+                    "name": "Abraham Raymond",
+                    "position": "Student Chaplain",
+                    "faculty": "Natural and Applied Science",
+                    "created_at": datetime.utcnow()
+                }
+            ]
+            candidates_collection.insert_many(real_candidates)
+            logger.info("✅ REAL candidates added to MongoDB")
+        else:
+            logger.info("✅ Candidates already exist in database")
+            
+    except Exception as e:
+        logger.error(f"❌ Database initialization failed: {e}")
 
 # Initialize database
 init_db()
@@ -280,15 +291,22 @@ def serve_login():
 
 # Serve the admin dashboard
 @app.route('/admin_dashboard')
-@login_required  # Keep this for page routes
+@login_required
 def serve_admin_dashboard():
     return render_template('admin_dashboard.html')
 
-# API Routes - USE api_login_required INSTEAD OF login_required
+# API Routes
 @app.route('/api/admin/login', methods=['POST'])
 def admin_login():
     """Admin login API"""
     try:
+        # Check if database is connected
+        if db is None:
+            return jsonify({
+                'success': False,
+                'message': 'Database connection failed. Please check server logs.'
+            }), 500
+
         data = request.get_json()
         if not data:
             return jsonify({
@@ -307,7 +325,7 @@ def admin_login():
                 'message': 'Username and password are required'
             }), 400
         
-        # FIXED: Proper password verification
+        # Verify credentials
         if username == ADMIN_USERNAME and bcrypt.checkpw(password.encode('utf-8'), ADMIN_PASSWORD_HASH):
             user = User(username)
             login_user(user)
@@ -332,7 +350,7 @@ def admin_login():
         }), 500
 
 @app.route('/api/admin/logout', methods=['POST'])
-@api_login_required  # Use custom decorator
+@api_login_required
 def admin_logout():
     """Admin logout API"""
     try:
@@ -350,10 +368,13 @@ def admin_logout():
         }), 500
 
 @app.route('/api/stats', methods=['GET'])
-@api_login_required  # Use custom decorator
+@api_login_required
 def get_stats():
     """Get election statistics"""
     try:
+        voters_collection = get_collection('voters')
+        votes_collection = get_collection('votes')
+        
         total_voters = voters_collection.count_documents({})
         votes_cast = votes_collection.count_documents({})
         voted_count = voters_collection.count_documents({'has_voted': True})
@@ -376,10 +397,13 @@ def get_stats():
         }), 500
 
 @app.route('/api/results', methods=['GET'])
-@api_login_required  # Use custom decorator
+@api_login_required
 def get_results():
     """Get election results"""
     try:
+        votes_collection = get_collection('votes')
+        candidates_collection = get_collection('candidates')
+        
         pipeline = [
             {
                 '$group': {
@@ -421,10 +445,12 @@ def get_results():
         }), 500
 
 @app.route('/api/voters', methods=['GET'])
-@api_login_required  # Use custom decorator
+@api_login_required
 def get_voters():
     """Get list of all registered voters"""
     try:
+        voters_collection = get_collection('voters')
+        
         voters = list(voters_collection.find({}).sort('registration_date', -1))
         
         voters_list = []
@@ -448,14 +474,16 @@ def get_voters():
         }), 500
 
 @app.route('/api/election/control', methods=['POST'])
-@api_login_required  # Use custom decorator
+@api_login_required
 def control_election():
     """Control election status (start, pause, end, reset)"""
     try:
+        election_settings_collection = get_collection('election_settings')
+        votes_collection = get_collection('votes')
+        voters_collection = get_collection('voters')
+        
         data = request.get_json()
         action = data.get('action')
-        
-        election_settings = election_settings_collection.find_one({})
         
         if action == 'start':
             election_settings_collection.update_one({}, {
@@ -524,6 +552,8 @@ def control_election():
 def get_election_status():
     """Get current election status"""
     try:
+        election_settings_collection = get_collection('election_settings')
+        
         election_settings = election_settings_collection.find_one({})
         election_status = 'not_started'
         if election_settings:
@@ -555,6 +585,7 @@ def health_check():
     return jsonify({
         'status': 'healthy',
         'message': 'Server is running',
+        'database_connected': db is not None,
         'timestamp': datetime.utcnow().isoformat()
     })
 
