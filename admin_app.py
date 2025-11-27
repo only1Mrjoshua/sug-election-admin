@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template, redirect, url_for
 from flask_cors import CORS
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from pymongo import MongoClient
@@ -86,9 +86,11 @@ def unauthorized():
     # For regular pages, redirect to login
     return redirect(url_for('serve_login'))
 
-# Admin credentials
+# Admin credentials - FIXED: Store the hash properly
 ADMIN_USERNAME = "admin"
-ADMIN_PASSWORD_HASH = bcrypt.hashpw("obonguni2025".encode('utf-8'), bcrypt.gensalt())
+ADMIN_PASSWORD = "obonguni2025"
+# Generate hash once and store it
+ADMIN_PASSWORD_HASH = bcrypt.hashpw(ADMIN_PASSWORD.encode('utf-8'), bcrypt.gensalt())
 
 class User(UserMixin):
     def __init__(self, username):
@@ -286,34 +288,66 @@ def serve_admin_dashboard():
 @app.route('/api/admin/login', methods=['POST'])
 def admin_login():
     """Admin login API"""
-    data = request.get_json()
-    username = data.get('username')
-    password = data.get('password')
-    
-    if username == ADMIN_USERNAME and bcrypt.checkpw(password.encode('utf-8'), ADMIN_PASSWORD_HASH):
-        user = User(username)
-        login_user(user)
-        return jsonify({
-            'success': True,
-            'message': 'Login successful',
-            'redirect': '/admin_dashboard'
-        })
-    else:
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                'success': False,
+                'message': 'No data received'
+            }), 400
+            
+        username = data.get('username')
+        password = data.get('password')
+        
+        logger.info(f"Login attempt for username: {username}")
+        
+        if not username or not password:
+            return jsonify({
+                'success': False,
+                'message': 'Username and password are required'
+            }), 400
+        
+        # FIXED: Proper password verification
+        if username == ADMIN_USERNAME and bcrypt.checkpw(password.encode('utf-8'), ADMIN_PASSWORD_HASH):
+            user = User(username)
+            login_user(user)
+            logger.info(f"Successful login for: {username}")
+            return jsonify({
+                'success': True,
+                'message': 'Login successful',
+                'redirect': '/admin_dashboard'
+            })
+        else:
+            logger.warning(f"Failed login attempt for: {username}")
+            return jsonify({
+                'success': False,
+                'message': 'Invalid credentials. Please try again.'
+            }), 401
+            
+    except Exception as e:
+        logger.error(f"Login error: {str(e)}")
         return jsonify({
             'success': False,
-            'message': 'Invalid credentials. Please try again.'
-        }), 401
+            'message': 'Server error during login'
+        }), 500
 
 @app.route('/api/admin/logout', methods=['POST'])
 @api_login_required  # Use custom decorator
 def admin_logout():
     """Admin logout API"""
-    logout_user()
-    return jsonify({
-        'success': True,
-        'message': 'You have been logged out successfully.',
-        'redirect': '/'
-    })
+    try:
+        logout_user()
+        return jsonify({
+            'success': True,
+            'message': 'You have been logged out successfully.',
+            'redirect': '/'
+        })
+    except Exception as e:
+        logger.error(f"Logout error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': 'Error during logout'
+        }), 500
 
 @app.route('/api/stats', methods=['GET'])
 @api_login_required  # Use custom decorator
@@ -335,6 +369,7 @@ def get_stats():
         })
         
     except Exception as e:
+        logger.error(f"Stats error: {str(e)}")
         return jsonify({
             'success': False,
             'message': f'Error fetching stats: {str(e)}'
@@ -379,6 +414,7 @@ def get_results():
         })
         
     except Exception as e:
+        logger.error(f"Results error: {str(e)}")
         return jsonify({
             'success': False,
             'message': f'Error fetching results: {str(e)}'
@@ -405,6 +441,7 @@ def get_voters():
         })
         
     except Exception as e:
+        logger.error(f"Voters error: {str(e)}")
         return jsonify({
             'success': False,
             'message': f'Error fetching voters: {str(e)}'
@@ -469,18 +506,19 @@ def control_election():
                 'message': 'Invalid action'
             }), 400
         
+        logger.info(f"Election control action: {action}")
         return jsonify({
             'success': True,
             'message': message
         })
         
     except Exception as e:
+        logger.error(f"Election control error: {str(e)}")
         return jsonify({
             'success': False,
             'message': f'Error controlling election: {str(e)}'
         }), 500
 
-# Add this route to your Flask app if missing
 @app.route('/api/election/status', methods=['GET'])
 @api_login_required
 def get_election_status():
@@ -506,6 +544,7 @@ def get_election_status():
         })
         
     except Exception as e:
+        logger.error(f"Election status error: {str(e)}")
         return jsonify({
             'success': False,
             'message': f'Error fetching election status: {str(e)}'
@@ -519,7 +558,29 @@ def health_check():
         'timestamp': datetime.utcnow().isoformat()
     })
 
+# Error handlers
+@app.errorhandler(404)
+def not_found(error):
+    if request.path.startswith('/api/'):
+        return jsonify({
+            'success': False,
+            'message': 'API endpoint not found'
+        }), 404
+    return render_template('index.html')
+
+@app.errorhandler(500)
+def internal_error(error):
+    if request.path.startswith('/api/'):
+        return jsonify({
+            'success': False,
+            'message': 'Internal server error'
+        }), 500
+    return render_template('index.html')
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5002))
     print("🚀 Starting Admin Dashboard API - Obong University SRC Elections")
+    print(f"📊 MongoDB Connected: {db is not None}")
+    print(f"🔐 Admin Username: {ADMIN_USERNAME}")
+    print(f"🌐 Server running on port: {port}")
     app.run(debug=False, host='0.0.0.0', port=port)

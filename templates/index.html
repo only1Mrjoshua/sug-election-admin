@@ -95,16 +95,6 @@
         text-align: left;
       }
 
-      /* Add this to your existing CSS */
-      .alert div {
-        flex: 1;
-      }
-
-      .alert strong {
-        display: block;
-        margin-bottom: 2px;
-      }
-
       label {
         display: block;
         margin-bottom: 8px;
@@ -373,12 +363,14 @@
 
             console.log("Response status:", response.status);
 
-            // First, try to parse as JSON
+            // FIXED: Check content type before reading response
+            const contentType = response.headers.get("content-type");
             let data;
-            try {
+
+            if (contentType && contentType.includes("application/json")) {
               data = await response.json();
-            } catch (jsonError) {
-              // If JSON parsing fails, it's probably HTML
+            } else {
+              // If not JSON, read as text for debugging
               const textResponse = await response.text();
               console.error(
                 "Non-JSON response received:",
@@ -452,9 +444,9 @@
           const iconClass =
             type === "error" ? "exclamation-circle" : "check-circle";
           alertDiv.innerHTML = `
-        <i class="fas fa-${iconClass}"></i>
-        <span>${message}</span>
-      `;
+            <i class="fas fa-${iconClass}"></i>
+            <span>${message}</span>
+          `;
 
           messageContainer.appendChild(alertDiv);
 
