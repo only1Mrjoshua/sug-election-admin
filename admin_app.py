@@ -16,6 +16,10 @@ from reportlab.lib import colors
 from reportlab.lib.units import inch
 import io
 
+# Import the separated data files
+from sample_voters import get_sample_voters
+from sample_candidates import get_sample_candidates
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -108,7 +112,7 @@ def get_collection(collection_name):
     return db[collection_name]
 
 def init_db():
-    """Initialize database with sample data"""
+    """Initialize database with sample data from separate files"""
     try:
         if db is None:
             logger.error("Database not connected - cannot initialize")
@@ -149,79 +153,17 @@ def init_db():
             })
             logger.info("✅ Election settings initialized")
 
-        # Initialize sample voters with ID and name system
+        # Initialize sample voters from separate file
         if voters_collection.count_documents({}) == 0:
-            sample_voters = [
-                {
-                    "voter_id": "V2024001",
-                    "full_name": "John Chukwuma Adebayo",
-                    "has_voted": False,
-                    "registration_date": datetime.utcnow()
-                },
-                {
-                    "voter_id": "V2024002", 
-                    "full_name": "Grace Ngozi Okoro",
-                    "has_voted": False,
-                    "registration_date": datetime.utcnow()
-                },
-                {
-                    "voter_id": "V2024003",
-                    "full_name": "Michael Oluwaseun Bello",
-                    "has_voted": False,
-                    "registration_date": datetime.utcnow()
-                },
-                {
-                    "voter_id": "V2024004",
-                    "full_name": "Sarah Temitope Johnson",
-                    "has_voted": False,
-                    "registration_date": datetime.utcnow()
-                },
-                {
-                    "voter_id": "V2024005",
-                    "full_name": "David Ifeanyi Mohammed",
-                    "has_voted": False,
-                    "registration_date": datetime.utcnow()
-                }
-            ]
+            sample_voters = get_sample_voters()
             voters_collection.insert_many(sample_voters)
-            logger.info("✅ Sample voters added to database")
+            logger.info(f"✅ {len(sample_voters)} sample voters added to database from file")
 
-        # Initialize candidates
+        # Initialize candidates from separate file
         if candidates_collection.count_documents({}) == 0:
-            real_candidates = [
-                {
-                    "name": "Olukunle Tomiwa Covenant",
-                    "position": "President",
-                    "faculty": "Natural and Applied Science",
-                    "created_at": datetime.utcnow()
-                },
-                {
-                    "name": "Kennedy Solomon", 
-                    "position": "President",
-                    "faculty": "Natural and Applied Science",
-                    "created_at": datetime.utcnow()
-                },
-                {
-                    "name": "Jeremiah Gideon Emmanuel",
-                    "position": "President",
-                    "faculty": "Natural and Applied Science",
-                    "created_at": datetime.utcnow()
-                },
-                {
-                    "name": "Onwuoha Confidence Daberechi",
-                    "position": "Vice President",
-                    "faculty": "Natural and Applied Science",
-                    "created_at": datetime.utcnow()
-                },
-                {
-                    "name": "Babade Beatrice Jonathan",
-                    "position": "Vice President",
-                    "faculty": "Arts and Communications",
-                    "created_at": datetime.utcnow()
-                }
-            ]
+            real_candidates = get_sample_candidates()
             candidates_collection.insert_many(real_candidates)
-            logger.info("✅ REAL candidates added to MongoDB")
+            logger.info(f"✅ {len(real_candidates)} REAL candidates added to MongoDB from file")
         else:
             logger.info("✅ Candidates already exist in database")
             
