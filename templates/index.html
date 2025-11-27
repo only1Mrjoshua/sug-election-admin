@@ -95,6 +95,16 @@
         text-align: left;
       }
 
+      /* Add this to your existing CSS */
+      .alert div {
+        flex: 1;
+      }
+
+      .alert strong {
+        display: block;
+        margin-bottom: 2px;
+      }
+
       label {
         display: block;
         margin-bottom: 8px;
@@ -289,12 +299,39 @@
         init() {
           this.bindEvents();
           this.detectEnvironment();
+          this.checkExistingSession();
+        }
+
+        // Check if user is already logged in
+        async checkExistingSession() {
+          try {
+            const apiBase = this.getApiBase();
+            const response = await fetch(`${apiBase}/election/status`, {
+              credentials: "include",
+            });
+
+            if (response.ok) {
+              const data = await response.json();
+              if (data.success) {
+                console.log("User already logged in, redirecting to dashboard");
+                // User is already authenticated, redirect to dashboard
+                setTimeout(() => {
+                  window.location.href = "/admin_dashboard";
+                }, 500);
+              }
+            }
+          } catch (error) {
+            // It's normal to get errors here if not logged in
+            console.log("No existing session found, user needs to login");
+          }
         }
 
         // Detect current environment and update UI
         detectEnvironment() {
           const environmentInfo = document.getElementById("environmentInfo");
           const environmentText = document.getElementById("environmentText");
+
+          if (!environmentInfo || !environmentText) return;
 
           if (
             window.location.hostname.includes("render.com") ||
@@ -320,85 +357,71 @@
 
         // Get API base URL based on current environment
         getApiBase() {
-          // Use the same origin for both localhost and production
           return window.location.origin + "/api";
-        }
-
-        // Enhanced fetch with error handling
-        async apiFetch(url, options = {}) {
-          try {
-            const response = await fetch(url, {
-              credentials: "include",
-              ...options,
-            });
-
-            // Handle authentication errors
-            if (response.status === 401) {
-              const errorData = await response.json().catch(() => null);
-              if (errorData && errorData.login_required) {
-                this.showMessage(
-                  "Session expired. Please log in again.",
-                  "error"
-                );
-                // Don't redirect from login page on 401
-                return response;
-              }
-            }
-
-            // Check if response is HTML (error page)
-            const contentType = response.headers.get("content-type");
-            if (contentType && contentType.includes("text/html")) {
-              const htmlText = await response.text();
-              console.error(
-                "Received HTML instead of JSON:",
-                htmlText.substring(0, 500)
-              );
-              throw new Error(
-                "Server returned HTML page instead of JSON data."
-              );
-            }
-
-            return response;
-          } catch (error) {
-            console.error("API fetch error:", error);
-            throw error;
-          }
         }
 
         bindEvents() {
           const loginForm = document.getElementById("loginForm");
-          loginForm.addEventListener("submit", (e) => this.handleLogin(e));
+          if (loginForm) {
+            loginForm.addEventListener("submit", (e) => this.handleLogin(e));
+          }
+
+          // Add Enter key support
+          const passwordInput = document.getElementById("password");
+          if (passwordInput) {
+            passwordInput.addEventListener("keypress", (e) => {
+              if (e.key === "Enter") {
+                this.handleLogin(e);
+              }
+            });
+          }
         }
 
         async handleLogin(e) {
-          e.preventDefault();
+          if (e) e.preventDefault();
 
-          const username = document.getElementById("username").value;
-          const password = document.getElementById("password").value;
+          const username = document.getElementById("username")?.value;
+          const password = document.getElementById("password")?.value;
           const loginBtn = document.getElementById("loginBtn");
           const loginText = document.getElementById("loginText");
           const loginLoading = document.getElementById("loginLoading");
 
+          // Validate inputs
+          if (!username || !password) {
+            this.showMessage(
+              "Please enter both username and password",
+              "error"
+            );
+            return;
+          }
+
           // Show loading state
-          loginBtn.disabled = true;
-          loginText.style.display = "none";
-          loginLoading.style.display = "inline";
+          if (loginBtn && loginText && loginLoading) {
+            loginBtn.disabled = true;
+            loginText.style.display = "none";
+            loginLoading.style.display = "inline";
+          }
 
           try {
             const apiBase = this.getApiBase();
             console.log("Attempting login to:", `${apiBase}/admin/login`);
 
-            const response = await this.apiFetch(`${apiBase}/admin/login`, {
+            const response = await fetch(`${apiBase}/admin/login`, {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
               },
+              credentials: "include",
               body: JSON.stringify({ username, password }),
             });
 
-            if (!response.ok) {
+            // Handle different response types
+            const contentType = response.headers.get("content-type");
+            if (!contentType || !contentType.includes("application/json")) {
+              const text = await response.text();
+              console.error("Non-JSON response:", text.substring(0, 200));
               throw new Error(
-                `HTTP ${response.status}: ${response.statusText}`
+                `Server returned ${response.status}. Please try again.`
               );
             }
 
@@ -424,14 +447,15 @@
 
             let errorMessage = "Network error. Please try again.";
             if (error.message.includes("Failed to fetch")) {
-              errorMessage =
-                "Cannot connect to server. Please check if the server is running and CORS is configured.";
+              errorMessage = "Cannot connect to server. Please check:";
+              errorMessage += "\n• Server is running";
+              errorMessage += "\n• CORS is configured";
+              errorMessage += "\n• Network connection is stable";
             } else if (error.message.includes("HTTP 401")) {
               errorMessage =
                 "Invalid credentials. Please check your username and password.";
-            } else if (error.message.includes("HTML page")) {
-              errorMessage =
-                "Server configuration error. Please contact administrator.";
+            } else if (error.message.includes("HTTP 500")) {
+              errorMessage = "Server error. Please contact administrator.";
             } else {
               errorMessage = error.message;
             }
@@ -439,14 +463,17 @@
             this.showMessage(errorMessage, "error");
           } finally {
             // Reset loading state
-            loginBtn.disabled = false;
-            loginText.style.display = "inline";
-            loginLoading.style.display = "none";
+            if (loginBtn && loginText && loginLoading) {
+              loginBtn.disabled = false;
+              loginText.style.display = "inline";
+              loginLoading.style.display = "none";
+            }
           }
         }
 
         showMessage(message, type) {
           const messageContainer = document.getElementById("messageContainer");
+          if (!messageContainer) return;
 
           // Clear existing messages
           messageContainer.innerHTML = "";
@@ -458,7 +485,10 @@
             type === "error" ? "exclamation-circle" : "check-circle";
           alertDiv.innerHTML = `
         <i class="fas fa-${iconClass}"></i>
-        <span>${message}</span>
+        <div>
+          <strong>${type === "error" ? "Error" : "Success"}</strong>
+          <div style="margin-top: 5px; font-size: 0.9em;">${message}</div>
+        </div>
       `;
 
           messageContainer.appendChild(alertDiv);
@@ -466,9 +496,14 @@
           // Auto-remove success messages after 3 seconds
           if (type === "success") {
             setTimeout(() => {
-              alertDiv.remove();
+              if (alertDiv.parentNode === messageContainer) {
+                alertDiv.remove();
+              }
             }, 3000);
           }
+
+          // Scroll to message for mobile users
+          alertDiv.scrollIntoView({ behavior: "smooth", block: "nearest" });
         }
       }
 
@@ -481,8 +516,19 @@
           window.location.hostname === "localhost" ||
           window.location.hostname === "127.0.0.1"
         ) {
-          document.getElementById("username").value = "admin";
-          document.getElementById("password").value = "obonguni2025";
+          const usernameInput = document.getElementById("username");
+          const passwordInput = document.getElementById("password");
+
+          if (usernameInput) usernameInput.value = "admin";
+          if (passwordInput) passwordInput.value = "obonguni2025";
+        }
+
+        // Focus on username field on load
+        const usernameInput = document.getElementById("username");
+        if (usernameInput) {
+          setTimeout(() => {
+            usernameInput.focus();
+          }, 100);
         }
       });
     </script>

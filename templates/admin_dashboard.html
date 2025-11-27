@@ -1280,15 +1280,15 @@
     </div>
 
     <script>
-      // Dynamic API base URL for both localhost and Render
+      // Dynamic API base URL
       const getApiBase = () => {
-        // Use the same origin for both localhost and production
         return window.location.origin + "/api";
       };
 
       // Enhanced fetch with authentication handling
       async function apiFetch(url, options = {}) {
         try {
+          console.log(`API Call: ${url}`);
           const response = await fetch(url, {
             credentials: "include",
             ...options,
@@ -1297,24 +1297,9 @@
           // Handle authentication errors
           if (response.status === 401) {
             const errorData = await response.json().catch(() => null);
-            if (errorData && errorData.login_required) {
-              // Redirect to login page
-              window.location.href = "/";
-              throw new Error("Authentication required");
-            }
-          }
-
-          // Check if response is HTML (error page)
-          const contentType = response.headers.get("content-type");
-          if (contentType && contentType.includes("text/html")) {
-            const htmlText = await response.text();
-            console.error(
-              "Received HTML instead of JSON:",
-              htmlText.substring(0, 500)
-            );
-            throw new Error(
-              "Server returned HTML page instead of JSON data. Check authentication."
-            );
+            console.log("Authentication required, redirecting to login");
+            window.location.href = "/";
+            throw new Error("Authentication required");
           }
 
           if (!response.ok) {
@@ -1325,6 +1310,17 @@
         } catch (error) {
           console.error("API fetch error:", error);
           throw error;
+        }
+      }
+
+      // Check authentication status
+      async function checkAuth() {
+        try {
+          const response = await apiFetch(getApiBase() + "/election/status");
+          return true;
+        } catch (error) {
+          console.log("Auth check failed:", error);
+          return false;
         }
       }
 
@@ -1346,15 +1342,17 @@
         document.body.style.overflow = "auto";
       }
 
-      mobileMenuBtn.addEventListener("click", openMobileMenu);
-      mobileSidebarClose.addEventListener("click", closeMobileMenu);
-      mobileOverlay.addEventListener("click", closeMobileMenu);
+      if (mobileMenuBtn)
+        mobileMenuBtn.addEventListener("click", openMobileMenu);
+      if (mobileSidebarClose)
+        mobileSidebarClose.addEventListener("click", closeMobileMenu);
+      if (mobileOverlay)
+        mobileOverlay.addEventListener("click", closeMobileMenu);
 
       // Close mobile menu when clicking on nav items
       document.querySelectorAll(".mobile-sidebar .nav-item").forEach((item) => {
         item.addEventListener("click", () => {
           closeMobileMenu();
-          // Also trigger the tab change
           const tab = item.getAttribute("data-tab");
           switchTab(tab);
         });
@@ -1421,13 +1419,7 @@
             const response = await apiFetch(getApiBase() + "/admin/logout", {
               method: "POST",
             });
-
-            if (response.ok) {
-              window.location.href = "/";
-            } else {
-              // If logout fails, redirect to login page anyway
-              window.location.href = "/";
-            }
+            window.location.href = "/";
           } catch (error) {
             console.error("Logout error:", error);
             window.location.href = "/";
@@ -1439,8 +1431,16 @@
         console.error(`Error in ${context}:`, error);
 
         let errorMessage = "An unexpected error occurred. Please try again.";
-        if (error.message) {
+        if (
+          error.message &&
+          !error.message.includes("Authentication required")
+        ) {
           errorMessage = error.message;
+        }
+
+        // Don't show error alert for auth errors (we already redirect)
+        if (error.message.includes("Authentication required")) {
+          return;
         }
 
         // Create error alert
@@ -1456,12 +1456,14 @@
 
         // Insert at the top of the current tab content
         const currentTab = document.querySelector(".tab-content.active");
-        currentTab.insertBefore(alert, currentTab.firstChild);
+        if (currentTab) {
+          currentTab.insertBefore(alert, currentTab.firstChild);
 
-        // Remove alert after 5 seconds
-        setTimeout(() => {
-          alert.remove();
-        }, 5000);
+          // Remove alert after 5 seconds
+          setTimeout(() => {
+            alert.remove();
+          }, 5000);
+        }
       }
 
       // Load election status
@@ -1472,10 +1474,12 @@
 
           if (result.success) {
             const statusElement = document.getElementById("electionStatus");
-            statusElement.innerHTML = `<i class="fas fa-circle"></i> ${result.status
-              .replace("_", " ")
-              .toUpperCase()}`;
-            statusElement.style.backgroundColor = result.color;
+            if (statusElement) {
+              statusElement.innerHTML = `<i class="fas fa-circle"></i> ${result.status
+                .replace("_", " ")
+                .toUpperCase()}`;
+              statusElement.style.backgroundColor = result.color;
+            }
           }
         } catch (error) {
           console.error("Error loading election status:", error);
@@ -1485,6 +1489,7 @@
       // Load results
       async function loadResults() {
         const container = document.getElementById("results-container");
+        if (!container) return;
 
         try {
           // Show loading state
@@ -1608,16 +1613,19 @@
                     `;
             }
 
-            document.getElementById("last-update").textContent =
-              new Date().toLocaleString();
+            const lastUpdate = document.getElementById("last-update");
+            if (lastUpdate) {
+              lastUpdate.textContent = new Date().toLocaleString();
+            }
           } else {
             throw new Error(result.message || "Failed to load results");
           }
         } catch (error) {
           handleError("loadResults", error);
 
-          // Show error state
-          container.innerHTML = `
+          // Only show error state if it's not an auth error
+          if (!error.message.includes("Authentication required")) {
+            container.innerHTML = `
                 <div class="empty-state">
                     <div class="empty-icon">
                         <i class="fas fa-exclamation-triangle"></i>
@@ -1630,6 +1638,7 @@
                     </button>
                 </div>
             `;
+          }
         }
       }
 
@@ -1640,10 +1649,15 @@
           const result = await response.json();
 
           if (result.success) {
-            document.getElementById("total-voters").textContent =
-              result.stats.total_registered_voters;
-            document.getElementById("total-votes").textContent =
-              result.stats.votes_cast;
+            const totalVoters = document.getElementById("total-voters");
+            const totalVotes = document.getElementById("total-votes");
+            const turnoutRate = document.getElementById("turnout-rate");
+            const votedCount = document.getElementById("voted-count");
+            const lastUpdate = document.getElementById("last-update");
+
+            if (totalVoters)
+              totalVoters.textContent = result.stats.total_registered_voters;
+            if (totalVotes) totalVotes.textContent = result.stats.votes_cast;
 
             // Calculate turnout percentage
             const turnout =
@@ -1654,33 +1668,35 @@
                       100
                   )
                 : 0;
-            document.getElementById("turnout-rate").textContent = turnout + "%";
+            if (turnoutRate) turnoutRate.textContent = turnout + "%";
 
-            document.getElementById("voted-count").textContent =
-              result.stats.voted_count || 0;
-            document.getElementById("last-update").textContent =
-              new Date().toLocaleString();
+            if (votedCount)
+              votedCount.textContent = result.stats.voted_count || 0;
+            if (lastUpdate)
+              lastUpdate.textContent = new Date().toLocaleString();
 
             // Show success message
             const currentTab = document.getElementById("dashboard-tab");
-            const alert = document.createElement("div");
-            alert.className = "alert alert-success";
-            alert.innerHTML = `
+            if (currentTab) {
+              const alert = document.createElement("div");
+              alert.className = "alert alert-success";
+              alert.innerHTML = `
                     <i class="fas fa-check-circle"></i>
                     <div>
                         <strong>Statistics Updated</strong>
                         <p>Election statistics have been successfully refreshed.</p>
                     </div>
                 `;
-            currentTab.insertBefore(
-              alert,
-              currentTab.querySelector(".stats-grid")
-            );
+              currentTab.insertBefore(
+                alert,
+                currentTab.querySelector(".stats-grid")
+              );
 
-            // Remove alert after 3 seconds
-            setTimeout(() => {
-              alert.remove();
-            }, 3000);
+              // Remove alert after 3 seconds
+              setTimeout(() => {
+                alert.remove();
+              }, 3000);
+            }
           } else {
             throw new Error(result.message || "Failed to load statistics");
           }
@@ -1692,6 +1708,7 @@
       // Load voters list
       async function loadVoters() {
         const container = document.getElementById("voters-container");
+        if (!container) return;
 
         try {
           // Show loading state
@@ -1774,8 +1791,9 @@
         } catch (error) {
           handleError("loadVoters", error);
 
-          // Show error state
-          container.innerHTML = `
+          // Only show error state if it's not an auth error
+          if (!error.message.includes("Authentication required")) {
+            container.innerHTML = `
                 <div class="empty-state">
                     <div class="empty-icon">
                         <i class="fas fa-exclamation-triangle"></i>
@@ -1788,6 +1806,7 @@
                     </button>
                 </div>
             `;
+          }
         }
       }
 
@@ -1819,12 +1838,14 @@
                 `;
 
             const currentTab = document.querySelector(".tab-content.active");
-            currentTab.insertBefore(alert, currentTab.firstChild);
+            if (currentTab) {
+              currentTab.insertBefore(alert, currentTab.firstChild);
 
-            // Remove alert after 5 seconds
-            setTimeout(() => {
-              alert.remove();
-            }, 5000);
+              // Remove alert after 5 seconds
+              setTimeout(() => {
+                alert.remove();
+              }, 5000);
+            }
 
             // Reload election status
             loadElectionStatus();
@@ -1878,12 +1899,14 @@
                 `;
 
             const currentTab = document.querySelector(".tab-content.active");
-            currentTab.insertBefore(alert, currentTab.firstChild);
+            if (currentTab) {
+              currentTab.insertBefore(alert, currentTab.firstChild);
 
-            // Remove alert after 5 seconds
-            setTimeout(() => {
-              alert.remove();
-            }, 5000);
+              // Remove alert after 5 seconds
+              setTimeout(() => {
+                alert.remove();
+              }, 5000);
+            }
           } else {
             throw new Error(result.message || "Failed to export data");
           }
@@ -1905,30 +1928,41 @@
     `;
 
         const currentTab = document.querySelector(".tab-content.active");
-        currentTab.insertBefore(alert, currentTab.firstChild);
+        if (currentTab) {
+          currentTab.insertBefore(alert, currentTab.firstChild);
 
-        // Remove alert after 5 seconds
-        setTimeout(() => {
-          alert.remove();
-        }, 5000);
+          // Remove alert after 5 seconds
+          setTimeout(() => {
+            alert.remove();
+          }, 5000);
+        }
       }
 
-      // Initialize the page
-      document.addEventListener("DOMContentLoaded", () => {
-        loadElectionStatus();
-        loadResults();
-        loadStats();
+      // Initialize the page with authentication check
+      document.addEventListener("DOMContentLoaded", async () => {
+        console.log("Initializing admin dashboard...");
 
-        // Auto-refresh results every 30 seconds if on results tab
-        setInterval(() => {
-          if (
-            document
-              .querySelector(".nav-item.active")
-              .getAttribute("data-tab") === "results"
-          ) {
-            loadResults();
-          }
-        }, 30000);
+        // Check authentication first
+        const isAuthenticated = await checkAuth();
+
+        if (isAuthenticated) {
+          console.log("User authenticated, loading data...");
+          // Load initial data
+          loadElectionStatus();
+          loadResults();
+          loadStats();
+
+          // Auto-refresh results every 30 seconds if on results tab
+          setInterval(() => {
+            const activeNav = document.querySelector(".nav-item.active");
+            if (activeNav && activeNav.getAttribute("data-tab") === "results") {
+              loadResults();
+            }
+          }, 30000);
+        } else {
+          console.log("User not authenticated, redirecting to login...");
+          // The apiFetch will automatically redirect on 401 errors
+        }
       });
     </script>
   </body>
