@@ -296,32 +296,48 @@ def serve_admin_dashboard():
     return render_template('admin_dashboard.html')
 
 # API Routes
-@app.route('/api/admin/login', methods=['POST'])
+@app.route('/api/admin/login', methods=['POST', 'GET'])
 def admin_login():
-    """Admin login API"""
+    """Admin login API with enhanced debugging"""
     try:
-        # Check if database is connected
+        logger.info("=== LOGIN API CALLED ===")
+        logger.info(f"Request method: {request.method}")
+        logger.info(f"Request headers: {dict(request.headers)}")
+        logger.info(f"Database connected: {db is not None}")
+        
         if db is None:
-            logger.error("Database connection is None in admin_login")
+            logger.error("DATABASE IS NOT CONNECTED!")
             return jsonify({
                 'success': False,
-                'message': 'Database connection failed. Please check server logs.'
+                'message': 'Database not connected',
+                'debug': 'db_is_none'
             }), 500
+
+        if request.method == 'GET':
+            return jsonify({
+                'success': True,
+                'message': 'Login endpoint is reachable',
+                'database_connected': db is not None
+            })
 
         # Check if request has JSON data
         if not request.is_json:
             logger.error("Request is not JSON")
             return jsonify({
                 'success': False,
-                'message': 'Request must be JSON'
+                'message': 'Request must be JSON',
+                'debug': 'not_json'
             }), 400
 
         data = request.get_json()
+        logger.info(f"Received data: {data}")
+        
         if not data:
             logger.error("No JSON data received")
             return jsonify({
                 'success': False,
-                'message': 'No data received'
+                'message': 'No data received',
+                'debug': 'no_data'
             }), 400
             
         username = data.get('username')
@@ -333,12 +349,23 @@ def admin_login():
             logger.error("Missing username or password")
             return jsonify({
                 'success': False,
-                'message': 'Username and password are required'
+                'message': 'Username and password are required',
+                'debug': 'missing_credentials'
             }), 400
         
         # Verify credentials
         logger.info(f"Verifying credentials for: {username}")
-        if username == ADMIN_USERNAME and bcrypt.checkpw(password.encode('utf-8'), ADMIN_PASSWORD_HASH):
+        logger.info(f"Expected username: {ADMIN_USERNAME}")
+        
+        # Debug password verification
+        try:
+            password_matches = bcrypt.checkpw(password.encode('utf-8'), ADMIN_PASSWORD_HASH)
+            logger.info(f"Password matches: {password_matches}")
+        except Exception as e:
+            logger.error(f"Password check error: {e}")
+            password_matches = False
+        
+        if username == ADMIN_USERNAME and password_matches:
             user = User(username)
             login_user(user)
             logger.info(f"✅ Successful login for: {username}")
@@ -353,14 +380,16 @@ def admin_login():
             logger.warning(f"❌ Failed login attempt for: {username}")
             return jsonify({
                 'success': False,
-                'message': 'Invalid credentials. Please try again.'
+                'message': 'Invalid credentials. Please try again.',
+                'debug': 'invalid_credentials'
             }), 401
             
     except Exception as e:
         logger.error(f"💥 Login error: {str(e)}", exc_info=True)
         return jsonify({
             'success': False,
-            'message': f'Server error during login: {str(e)}'
+            'message': f'Server error during login: {str(e)}',
+            'debug': 'exception_occurred'
         }), 500
 
 @app.route('/api/admin/logout', methods=['POST'])
