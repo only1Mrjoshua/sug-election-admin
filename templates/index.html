@@ -310,7 +310,16 @@
         }
 
         getApiBase() {
-          return window.location.origin + "/api";
+          // Use the specific Flask backend URL for production
+          if (
+            window.location.hostname.includes("render.com") ||
+            window.location.hostname.includes("obong-university")
+          ) {
+            return "https://obong-university-src-election-admin-9x5w.onrender.com/api";
+          } else {
+            // Use localhost for development
+            return window.location.origin + "/api";
+          }
         }
 
         bindEvents() {
@@ -403,9 +412,16 @@
               this.showMessage("Login successful! Redirecting...", "success");
               console.log("Login successful, redirecting to dashboard");
 
-              // Redirect to admin dashboard
+              // Redirect to admin dashboard - use the same backend URL
               setTimeout(() => {
-                window.location.href = data.redirect || "/admin_dashboard";
+                const dashboardUrl = data.redirect || "/admin_dashboard";
+                if (dashboardUrl.startsWith("/")) {
+                  // If it's a relative path, use the backend URL as base
+                  window.location.href =
+                    this.getApiBase().replace("/api", "") + dashboardUrl;
+                } else {
+                  window.location.href = dashboardUrl;
+                }
               }, 1000);
             } else {
               this.showMessage(
@@ -461,9 +477,9 @@
           const iconClass =
             type === "error" ? "exclamation-circle" : "check-circle";
           alertDiv.innerHTML = `
-            <i class="fas fa-${iconClass}"></i>
-            <span>${message}</span>
-          `;
+        <i class="fas fa-${iconClass}"></i>
+        <span>${message}</span>
+      `;
 
           messageContainer.appendChild(alertDiv);
 

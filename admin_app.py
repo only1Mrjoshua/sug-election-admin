@@ -16,12 +16,10 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__, template_folder='templates', static_folder='static')
 app.secret_key = 'iauweiyvbiueyckuahsfdyrstvdKYWRIURIVTABSDFHCDVJQWT2648hfjbs'
-
-# Enhanced CORS configuration
 CORS(app, 
      origins=[
          "https://obong-university-src-election-admin-9x5w.onrender.com",
-         "https://obong-university-src-election-admin.onrender.com",
+         "https://obong-university-src-election-admin.onrender.com",  # Your frontend
          "http://localhost:5000", 
          "http://127.0.0.1:5000",
          "http://localhost:3000",
