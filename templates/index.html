@@ -367,31 +367,30 @@
               Object.fromEntries(response.headers.entries())
             );
 
-            // FIXED: Clone response first to handle multiple reads
-            const responseClone = response.clone();
+            // Check if response has content
+            const contentLength = response.headers.get("content-length");
+            console.log("Content length:", contentLength);
 
-            // Check content type before reading response
-            const contentType = response.headers.get("content-type");
-            let data;
-
-            if (contentType && contentType.includes("application/json")) {
-              data = await response.json();
-            } else {
-              // If not JSON, read as text for debugging
-              const textResponse = await responseClone.text();
-              console.error(
-                "Non-JSON response received:",
-                textResponse.substring(0, 500)
+            if (contentLength === "0" || contentLength === null) {
+              throw new Error(
+                "Server returned empty response. This indicates a server-side error."
               );
+            }
 
-              // Handle empty response
-              if (response.status === 200 && textResponse.trim() === "") {
+            // Try to parse as JSON
+            let data;
+            try {
+              data = await response.json();
+            } catch (jsonError) {
+              console.error("JSON parse error:", jsonError);
+
+              // If JSON parsing fails, try to get text for debugging
+              const textResponse = await response.text();
+              console.error("Raw response:", textResponse);
+
+              if (response.status === 200) {
                 throw new Error(
-                  "Server returned empty response. This usually means there's a server-side error or the API endpoint is not properly configured."
-                );
-              } else if (response.status === 200) {
-                throw new Error(
-                  "Server returned HTML instead of JSON. This usually means the API route is not configured correctly."
+                  "Server returned invalid JSON response. Please check server logs."
                 );
               } else {
                 throw new Error(
@@ -422,12 +421,12 @@
             if (error.message.includes("Failed to fetch")) {
               errorMessage =
                 "Cannot connect to server. Please check if the server is running.";
-            } else if (error.message.includes("HTML instead of JSON")) {
-              errorMessage =
-                "Server configuration error. The login API is not returning proper JSON data.";
             } else if (error.message.includes("empty response")) {
               errorMessage =
-                "Server returned empty response. Please check server logs for errors.";
+                "Server returned empty response. This indicates a server configuration error. Please check server logs.";
+            } else if (error.message.includes("invalid JSON")) {
+              errorMessage =
+                "Server returned invalid response. Please check server configuration.";
             } else if (error.message.includes("NetworkError")) {
               errorMessage =
                 "Network error. Please check your internet connection.";

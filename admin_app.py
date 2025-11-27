@@ -302,13 +302,23 @@ def admin_login():
     try:
         # Check if database is connected
         if db is None:
+            logger.error("Database connection is None in admin_login")
             return jsonify({
                 'success': False,
                 'message': 'Database connection failed. Please check server logs.'
             }), 500
 
+        # Check if request has JSON data
+        if not request.is_json:
+            logger.error("Request is not JSON")
+            return jsonify({
+                'success': False,
+                'message': 'Request must be JSON'
+            }), 400
+
         data = request.get_json()
         if not data:
+            logger.error("No JSON data received")
             return jsonify({
                 'success': False,
                 'message': 'No data received'
@@ -320,33 +330,37 @@ def admin_login():
         logger.info(f"Login attempt for username: {username}")
         
         if not username or not password:
+            logger.error("Missing username or password")
             return jsonify({
                 'success': False,
                 'message': 'Username and password are required'
             }), 400
         
         # Verify credentials
+        logger.info(f"Verifying credentials for: {username}")
         if username == ADMIN_USERNAME and bcrypt.checkpw(password.encode('utf-8'), ADMIN_PASSWORD_HASH):
             user = User(username)
             login_user(user)
-            logger.info(f"Successful login for: {username}")
-            return jsonify({
+            logger.info(f"✅ Successful login for: {username}")
+            response_data = {
                 'success': True,
                 'message': 'Login successful',
                 'redirect': '/admin_dashboard'
-            })
+            }
+            logger.info(f"Returning response: {response_data}")
+            return jsonify(response_data)
         else:
-            logger.warning(f"Failed login attempt for: {username}")
+            logger.warning(f"❌ Failed login attempt for: {username}")
             return jsonify({
                 'success': False,
                 'message': 'Invalid credentials. Please try again.'
             }), 401
             
     except Exception as e:
-        logger.error(f"Login error: {str(e)}")
+        logger.error(f"💥 Login error: {str(e)}", exc_info=True)
         return jsonify({
             'success': False,
-            'message': 'Server error during login'
+            'message': f'Server error during login: {str(e)}'
         }), 500
 
 @app.route('/api/admin/logout', methods=['POST'])
@@ -613,5 +627,6 @@ if __name__ == '__main__':
     print("🚀 Starting Admin Dashboard API - Obong University SRC Elections")
     print(f"📊 MongoDB Connected: {db is not None}")
     print(f"🔐 Admin Username: {ADMIN_USERNAME}")
+    print(f"🔑 Admin Password Hash: {ADMIN_PASSWORD_HASH}")
     print(f"🌐 Server running on port: {port}")
     app.run(debug=False, host='0.0.0.0', port=port)
