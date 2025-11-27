@@ -1132,13 +1132,20 @@
               <div>
                 <h2 class="page-title">Registered Voters</h2>
                 <p class="page-description">
-                  List of all registered voters and their voting status.
+                  List of all registered voters with their unique IDs and voting
+                  status.
                 </p>
               </div>
-              <button class="btn" id="refresh-voters">
-                <i class="fas fa-sync-alt"></i>
-                Refresh Voters
-              </button>
+              <div style="display: flex; gap: 10px">
+                <button class="btn" id="refresh-voters">
+                  <i class="fas fa-sync-alt"></i>
+                  Refresh Voters
+                </button>
+                <button class="btn btn-secondary" id="download-vote-report">
+                  <i class="fas fa-file-pdf"></i>
+                  Download Vote Report
+                </button>
+              </div>
             </div>
 
             <div id="voters-container">
@@ -1238,6 +1245,43 @@
             </div>
 
             <div class="position-card" style="margin-top: 25px">
+              <h3 class="position-title">Vote Management</h3>
+              <div class="candidates-list">
+                <div class="candidate-card">
+                  <div class="candidate-info">
+                    <div class="candidate-name">
+                      Download Detailed Vote Report
+                    </div>
+                    <div class="candidate-department">
+                      Generate a comprehensive PDF report of all votes organized
+                      by position and candidate
+                    </div>
+                  </div>
+                  <button
+                    class="btn btn-secondary"
+                    onclick="downloadVoteReport()"
+                  >
+                    <i class="fas fa-file-pdf"></i>
+                    Download PDF Report
+                  </button>
+                </div>
+                <div class="candidate-card">
+                  <div class="candidate-info">
+                    <div class="candidate-name">View Vote Details</div>
+                    <div class="candidate-department">
+                      View detailed information about each vote cast in the
+                      election
+                    </div>
+                  </div>
+                  <button class="btn" onclick="viewVoteDetails()">
+                    <i class="fas fa-search"></i>
+                    View Details
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="position-card" style="margin-top: 25px">
               <h3 class="position-title">System Configuration</h3>
               <div class="candidates-list">
                 <div class="candidate-card">
@@ -1280,16 +1324,14 @@
     </div>
 
     <script>
-      // Dynamic API base URL - FIXED to use correct backend
+      // Dynamic API base URL
       const getApiBase = () => {
-        // Use the specific Flask backend URL for production
         if (
           window.location.hostname.includes("render.com") ||
           window.location.hostname.includes("obong-university")
         ) {
           return "https://obong-university-src-election-admin-9x5w.onrender.com/api";
         } else {
-          // Use localhost for development
           return window.location.origin + "/api";
         }
       };
@@ -1426,6 +1468,9 @@
       document
         .getElementById("refresh-voters")
         .addEventListener("click", loadVoters);
+      document
+        .getElementById("download-vote-report")
+        .addEventListener("click", downloadVoteReport);
 
       // Logout functionality
       document
@@ -1436,7 +1481,7 @@
             const response = await apiFetch(getApiBase() + "/admin/logout", {
               method: "POST",
             });
-            // Redirect to login page - use the correct URL
+            // Redirect to login page
             if (window.location.hostname.includes("render.com")) {
               window.location.href =
                 "https://obong-university-src-election-admin.onrender.com/";
@@ -1475,12 +1520,12 @@
         const alert = document.createElement("div");
         alert.className = "alert alert-error";
         alert.innerHTML = `
-      <i class="fas fa-exclamation-circle"></i>
-      <div>
-          <strong>Error in ${context}</strong>
-          <p>${errorMessage}</p>
-      </div>
-    `;
+          <i class="fas fa-exclamation-circle"></i>
+          <div>
+              <strong>Error in ${context}</strong>
+              <p>${errorMessage}</p>
+          </div>
+        `;
 
         // Insert at the top of the current tab content
         const currentTab = document.querySelector(".tab-content.active");
@@ -1522,12 +1567,12 @@
         try {
           // Show loading state
           container.innerHTML = `
-          <div class="loading">
-              <div class="loading-spinner"></div>
-              <h3>Loading Election Results</h3>
-              <p>Please wait while we fetch the latest data...</p>
-          </div>
-      `;
+            <div class="loading">
+                <div class="loading-spinner"></div>
+                <h3>Loading Election Results</h3>
+                <p>Please wait while we fetch the latest data...</p>
+            </div>
+          `;
 
           const response = await apiFetch(getApiBase() + "/results");
           const result = await response.json();
@@ -1654,18 +1699,18 @@
           // Only show error state if it's not an auth error
           if (!error.message.includes("Authentication required")) {
             container.innerHTML = `
-            <div class="empty-state">
-                <div class="empty-icon">
-                    <i class="fas fa-exclamation-triangle"></i>
-                </div>
-                <h3>Unable to Load Results</h3>
-                <p>There was a problem fetching the election results. Please try again.</p>
-                <button class="btn" style="margin-top: 20px;" onclick="loadResults()">
-                    <i class="fas fa-redo"></i>
-                    Try Again
-                </button>
-            </div>
-        `;
+              <div class="empty-state">
+                  <div class="empty-icon">
+                      <i class="fas fa-exclamation-triangle"></i>
+                  </div>
+                  <h3>Unable to Load Results</h3>
+                  <p>There was a problem fetching the election results. Please try again.</p>
+                  <button class="btn" style="margin-top: 20px;" onclick="loadResults()">
+                      <i class="fas fa-redo"></i>
+                      Try Again
+                  </button>
+              </div>
+            `;
           }
         }
       }
@@ -1714,7 +1759,7 @@
                     <strong>Statistics Updated</strong>
                     <p>Election statistics have been successfully refreshed.</p>
                 </div>
-            `;
+              `;
               currentTab.insertBefore(
                 alert,
                 currentTab.querySelector(".stats-grid")
@@ -1733,7 +1778,7 @@
         }
       }
 
-      // Load voters list
+      // Load voters list with ID and name system
       async function loadVoters() {
         const container = document.getElementById("voters-container");
         if (!container) return;
@@ -1741,12 +1786,12 @@
         try {
           // Show loading state
           container.innerHTML = `
-          <div class="loading">
-              <div class="loading-spinner"></div>
-              <h3>Loading Voter Information</h3>
-              <p>Please wait while we fetch the latest data...</p>
-          </div>
-      `;
+            <div class="loading">
+                <div class="loading-spinner"></div>
+                <h3>Loading Voter Information</h3>
+                <p>Please wait while we fetch the latest data...</p>
+            </div>
+          `;
 
           const response = await apiFetch(getApiBase() + "/voters");
           const result = await response.json();
@@ -1775,7 +1820,12 @@
               voterCard.className = "voter-card";
               voterCard.innerHTML = `
                     <div class="voter-info">
-                        <div class="voter-name">${voter.matric_number}</div>
+                        <div class="voter-name">
+                            <strong>${voter.full_name}</strong>
+                            <div style="font-size: 0.9rem; color: var(--medium-gray); margin-top: 5px;">
+                                ID: ${voter.voter_id}
+                            </div>
+                        </div>
                         <div class="voter-details">
                             Registration Date: ${new Date(
                               voter.registration_date
@@ -1822,20 +1872,161 @@
           // Only show error state if it's not an auth error
           if (!error.message.includes("Authentication required")) {
             container.innerHTML = `
-            <div class="empty-state">
-                <div class="empty-icon">
-                    <i class="fas fa-exclamation-triangle"></i>
-                </div>
-                <h3>Unable to Load Voters</h3>
-                <p>There was a problem fetching the voter list. Please try again.</p>
-                <button class="btn" style="margin-top: 20px;" onclick="loadVoters()">
-                    <i class="fas fa-redo"></i>
-                    Try Again
-                </button>
-            </div>
-        `;
+              <div class="empty-state">
+                  <div class="empty-icon">
+                      <i class="fas fa-exclamation-triangle"></i>
+                  </div>
+                  <h3>Unable to Load Voters</h3>
+                  <p>There was a problem fetching the voter list. Please try again.</p>
+                  <button class="btn" style="margin-top: 20px;" onclick="loadVoters()">
+                      <i class="fas fa-redo"></i>
+                      Try Again
+                  </button>
+              </div>
+            `;
           }
         }
+      }
+
+      // Download vote report as PDF
+      async function downloadVoteReport() {
+        try {
+          const response = await apiFetch(getApiBase() + "/reports/votes-pdf");
+
+          if (!response.ok) {
+            throw new Error("Failed to generate PDF report");
+          }
+
+          // Create blob from response
+          const blob = await response.blob();
+
+          // Create download link
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.style.display = "none";
+          a.href = url;
+
+          // Generate filename with timestamp
+          const timestamp = new Date().toISOString().split("T")[0];
+          a.download = `election-vote-report-${timestamp}.pdf`;
+
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+
+          // Show success message
+          const alert = document.createElement("div");
+          alert.className = "alert alert-success";
+          alert.innerHTML = `
+              <i class="fas fa-check-circle"></i>
+              <div>
+                  <strong>PDF Report Generated</strong>
+                  <p>The vote report has been successfully downloaded.</p>
+              </div>
+          `;
+
+          const currentTab = document.querySelector(".tab-content.active");
+          if (currentTab) {
+            currentTab.insertBefore(alert, currentTab.firstChild);
+
+            // Remove alert after 5 seconds
+            setTimeout(() => {
+              alert.remove();
+            }, 5000);
+          }
+        } catch (error) {
+          handleError("downloadVoteReport", error);
+        }
+      }
+
+      // View detailed vote information
+      async function viewVoteDetails() {
+        try {
+          const response = await apiFetch(getApiBase() + "/votes/detailed");
+          const result = await response.json();
+
+          if (result.success) {
+            // Create a modal or new tab to display detailed votes
+            const votesWindow = window.open("", "_blank");
+            votesWindow.document.write(`
+                <html>
+                    <head>
+                        <title>Detailed Vote Report - Obong University SRC Election</title>
+                        <style>
+                            body { font-family: Arial, sans-serif; margin: 20px; }
+                            table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+                            th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+                            th { background-color: #d13d39; color: white; }
+                            tr:nth-child(even) { background-color: #f2f2f2; }
+                            .position-header { background-color: #2c8a45; color: white; padding: 10px; margin-top: 20px; }
+                        </style>
+                    </head>
+                    <body>
+                        <h1>Detailed Vote Report - Obong University SRC Election</h1>
+                        <p>Generated on: ${new Date().toLocaleString()}</p>
+                        ${generateVotesTable(result.votes)}
+                    </body>
+                </html>
+            `);
+            votesWindow.document.close();
+          } else {
+            throw new Error(result.message || "Failed to load vote details");
+          }
+        } catch (error) {
+          handleError("viewVoteDetails", error);
+        }
+      }
+
+      // Helper function to generate votes table
+      function generateVotesTable(votes) {
+        if (!votes || votes.length === 0) {
+          return "<p>No votes recorded yet.</p>";
+        }
+
+        // Group votes by position
+        const positions = {};
+        votes.forEach((vote) => {
+          if (!positions[vote.candidate_position]) {
+            positions[vote.candidate_position] = [];
+          }
+          positions[vote.candidate_position].push(vote);
+        });
+
+        let html = "";
+
+        for (const [position, positionVotes] of Object.entries(positions)) {
+          html += `<div class="position-header"><h2>${position}</h2></div>`;
+
+          // Group by candidate
+          const candidates = {};
+          positionVotes.forEach((vote) => {
+            if (!candidates[vote.candidate_name]) {
+              candidates[vote.candidate_name] = [];
+            }
+            candidates[vote.candidate_name].push(vote);
+          });
+
+          for (const [candidateName, candidateVotes] of Object.entries(
+            candidates
+          )) {
+            html += `<h3>${candidateName} - ${candidateVotes.length} votes</h3>`;
+            html += "<table>";
+            html +=
+              "<tr><th>Voter ID</th><th>Voter Name</th><th>Vote Date</th></tr>";
+
+            candidateVotes.forEach((vote) => {
+              html += `<tr>
+                <td>${vote.voter_id}</td>
+                <td>${vote.voter_name}</td>
+                <td>${new Date(vote.vote_date).toLocaleString()}</td>
+              </tr>`;
+            });
+
+            html += "</table><br>";
+          }
+        }
+
+        return html;
       }
 
       // Control election status
@@ -1948,12 +2139,12 @@
         const alert = document.createElement("div");
         alert.className = "alert alert-warning";
         alert.innerHTML = `
-  <i class="fas fa-info-circle"></i>
-  <div>
-    <strong>Log Viewer</strong>
-    <p>Log viewing functionality will be implemented in a future update.</p>
-  </div>
-`;
+          <i class="fas fa-info-circle"></i>
+          <div>
+            <strong>Log Viewer</strong>
+            <p>Log viewing functionality will be implemented in a future update.</p>
+          </div>
+        `;
 
         const currentTab = document.querySelector(".tab-content.active");
         if (currentTab) {

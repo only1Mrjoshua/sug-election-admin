@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template, redirect, url_for
+from flask import Flask, request, jsonify, render_template, redirect, url_for, make_response
 from flask_cors import CORS
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from pymongo import MongoClient
@@ -9,6 +9,12 @@ import os
 import urllib.parse
 import logging
 from functools import wraps
+from reportlab.lib.pagesizes import letter, A4
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib import colors
+from reportlab.lib.units import inch
+import io
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -19,7 +25,7 @@ app.secret_key = 'iauweiyvbiueyckuahsfdyrstvdKYWRIURIVTABSDFHCDVJQWT2648hfjbs'
 CORS(app, 
      origins=[
          "https://obong-university-src-election-admin-9x5w.onrender.com",
-         "https://obong-university-src-election-admin.onrender.com",  # Your frontend
+         "https://obong-university-src-election-admin.onrender.com",
          "http://localhost:5000", 
          "http://127.0.0.1:5000",
          "http://localhost:3000",
@@ -29,7 +35,7 @@ CORS(app,
      methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
      allow_headers=["Content-Type", "Authorization", "X-Requested-With"])
 
-# MongoDB configuration with proper password encoding
+# MongoDB configuration
 username = "only1MrJoshua"
 password = "LovuLord2025"
 encoded_password = urllib.parse.quote_plus(password)
@@ -37,7 +43,7 @@ encoded_password = urllib.parse.quote_plus(password)
 MONGO_URI = f"mongodb+srv://{username}:{encoded_password}@cluster0.9jqnavg.mongodb.net/election_db?retryWrites=true&w=majority&socketTimeoutMS=30000&connectTimeoutMS=30000&serverSelectionTimeoutMS=30000"
 DATABASE_NAME = "election_db"
 
-# Initialize MongoDB with connection pooling
+# Initialize MongoDB
 try:
     client = MongoClient(
         MONGO_URI,
@@ -45,7 +51,6 @@ try:
         retryWrites=True,
         retryReads=True
     )
-    # Test connection with timeout
     client.admin.command('ping', maxTimeMS=30000)
     db = client[DATABASE_NAME]
     logger.info("✅ MongoDB connection successful!")
@@ -71,23 +76,19 @@ def api_login_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-# Override Flask-Login's unauthorized handler to return JSON instead of redirect
 @login_manager.unauthorized_handler
 def unauthorized():
-    # If it's an API request, return JSON error
     if request.path.startswith('/api/'):
         return jsonify({
             'success': False,
             'message': 'Authentication required',
             'login_required': True
         }), 401
-    # For regular pages, redirect to login
     return redirect(url_for('serve_login'))
 
-# Admin credentials - FIXED: Store the hash properly
+# Admin credentials
 ADMIN_USERNAME = "admin"
 ADMIN_PASSWORD = "obonguni2025"
-# Generate hash once and store it
 ADMIN_PASSWORD_HASH = bcrypt.hashpw(ADMIN_PASSWORD.encode('utf-8'), bcrypt.gensalt())
 
 class User(UserMixin):
@@ -100,36 +101,11 @@ def load_user(username):
         return User(username)
     return None
 
-# Initialize collections safely
 def get_collection(collection_name):
     """Safely get collection reference"""
     if db is None:
         raise Exception("Database not connected")
     return db[collection_name]
-
-# Valid matric numbers database
-VALID_MATRIC_NUMBERS = {
-    "U20241001", "U20241002", "U20241003", "U20241004", "U20241005",
-    "U20241006", "U20241007", "U20241008", "U20241009", "U20241010",
-    "U20241011", "U20241012", "U20241013", "U20241014", "U20241015",
-    "U20241016", "U20241017", "U20241018", "U20241019", "U20241020",
-    "U20241021", "U20241022", "U20241023", "U20241024", "U20241025",
-    "U20242001", "U20242002", "U20242003", "U20242004", "U20242005",
-    "U20242006", "U20242007", "U20242008", "U20242009", "U20242010",
-    "U20242011", "U20242012", "U20242013", "U20242014", "U20242015",
-    "U20242016", "U20242017", "U20242018", "U20242019", "U20242020",
-    "U20242021", "U20242022", "U20242023", "U20242024", "U20242025",
-    "U20243001", "U20243002", "U20243003", "U20243004", "U20243005",
-    "U20243006", "U20243007", "U20243008", "U20243009", "U20243010",
-    "U20243011", "U20243012", "U20243013", "U20243014", "U20243015",
-    "U20243016", "U20243017", "U20243018", "U20243019", "U20243020",
-    "U20243021", "U20243022", "U20243023", "U20243024", "U20243025",
-    "U20244001", "U20244002", "U20244003", "U20244004", "U20244005",
-    "U20244006", "U20244007", "U20244008", "U20244009", "U20244010",
-    "U20244011", "U20244012", "U20244013", "U20244014", "U20244015",
-    "U20244016", "U20244017", "U20244018", "U20244019", "U20244020",
-    "U20244021", "U20244022", "U20244023", "U20244024", "U20244025"
-}
 
 def init_db():
     """Initialize database with sample data"""
@@ -143,19 +119,9 @@ def init_db():
         votes_collection = get_collection('votes')
         election_settings_collection = get_collection('election_settings')
 
-        # Clean up existing indexes
-        try:
-            current_voter_indexes = list(voters_collection.list_indexes())
-            for index in current_voter_indexes:
-                index_name = index['name']
-                if index_name == 'email_1':
-                    voters_collection.drop_index('email_1')
-        except Exception as e:
-            logger.info(f"Index cleanup: {e}")
-
         # Create indexes
         indexes_to_create = [
-            (voters_collection, "matric_number", True),
+            (voters_collection, "voter_id", True),
             (votes_collection, "candidate_id", False),
             (votes_collection, [("voter_id", 1), ("candidate_position", 1)], True),
         ]
@@ -182,6 +148,43 @@ def init_db():
                 'updated_at': datetime.utcnow()
             })
             logger.info("✅ Election settings initialized")
+
+        # Initialize sample voters with ID and name system
+        if voters_collection.count_documents({}) == 0:
+            sample_voters = [
+                {
+                    "voter_id": "V2024001",
+                    "full_name": "John Chukwuma Adebayo",
+                    "has_voted": False,
+                    "registration_date": datetime.utcnow()
+                },
+                {
+                    "voter_id": "V2024002", 
+                    "full_name": "Grace Ngozi Okoro",
+                    "has_voted": False,
+                    "registration_date": datetime.utcnow()
+                },
+                {
+                    "voter_id": "V2024003",
+                    "full_name": "Michael Oluwaseun Bello",
+                    "has_voted": False,
+                    "registration_date": datetime.utcnow()
+                },
+                {
+                    "voter_id": "V2024004",
+                    "full_name": "Sarah Temitope Johnson",
+                    "has_voted": False,
+                    "registration_date": datetime.utcnow()
+                },
+                {
+                    "voter_id": "V2024005",
+                    "full_name": "David Ifeanyi Mohammed",
+                    "has_voted": False,
+                    "registration_date": datetime.utcnow()
+                }
+            ]
+            voters_collection.insert_many(sample_voters)
+            logger.info("✅ Sample voters added to database")
 
         # Initialize candidates
         if candidates_collection.count_documents({}) == 0:
@@ -215,60 +218,6 @@ def init_db():
                     "position": "Vice President",
                     "faculty": "Arts and Communications",
                     "created_at": datetime.utcnow()
-                },
-                {
-                    "name": "Dimkpa Raymond Baribeebi",
-                    "position": "Financial Secretary",
-                    "faculty": "Natural and Applied Science",
-                    "created_at": datetime.utcnow()
-                },
-                {
-                    "name": "Mbang Donnoble Godwin",
-                    "position": "Director of Transport",
-                    "faculty": "Natural and Applied Science",
-                    "created_at": datetime.utcnow()
-                },
-                {
-                    "name": "Olukunle Titilola Oyindamola",
-                    "position": "Director of Socials",
-                    "faculty": "Management Science",
-                    "created_at": datetime.utcnow()
-                },
-                {
-                    "name": "Alasy Clinton Ebubechukwu",
-                    "position": "Director of Socials",
-                    "faculty": "Management Science",
-                    "created_at": datetime.utcnow()
-                },
-                {
-                    "name": "Collins Jacob",
-                    "position": "Director of Sports",
-                    "faculty": "Natural and Applied Science",
-                    "created_at": datetime.utcnow()
-                },
-                {
-                    "name": "Chisom Ejims",
-                    "position": "Director of Sports",
-                    "faculty": "Management Science",
-                    "created_at": datetime.utcnow()
-                },
-                {
-                    "name": "Davidson Lawrence",
-                    "position": "Director of Sports",
-                    "faculty": "Natural and Applied Science",
-                    "created_at": datetime.utcnow()
-                },
-                {
-                    "name": "Meshach Efioke",
-                    "position": "Director of Information",
-                    "faculty": "Natural and Applied Science",
-                    "created_at": datetime.utcnow()
-                },
-                {
-                    "name": "Abraham Raymond",
-                    "position": "Student Chaplain",
-                    "faculty": "Natural and Applied Science",
-                    "created_at": datetime.utcnow()
                 }
             ]
             candidates_collection.insert_many(real_candidates)
@@ -296,19 +245,12 @@ def serve_admin_dashboard():
 # API Routes
 @app.route('/api/admin/login', methods=['POST', 'GET'])
 def admin_login():
-    """Admin login API with enhanced debugging"""
+    """Admin login API"""
     try:
-        logger.info("=== LOGIN API CALLED ===")
-        logger.info(f"Request method: {request.method}")
-        logger.info(f"Request headers: {dict(request.headers)}")
-        logger.info(f"Database connected: {db is not None}")
-        
         if db is None:
-            logger.error("DATABASE IS NOT CONNECTED!")
             return jsonify({
                 'success': False,
-                'message': 'Database not connected',
-                'debug': 'db_is_none'
+                'message': 'Database not connected'
             }), 500
 
         if request.method == 'GET':
@@ -318,76 +260,43 @@ def admin_login():
                 'database_connected': db is not None
             })
 
-        # Check if request has JSON data
         if not request.is_json:
-            logger.error("Request is not JSON")
             return jsonify({
                 'success': False,
-                'message': 'Request must be JSON',
-                'debug': 'not_json'
+                'message': 'Request must be JSON'
             }), 400
 
         data = request.get_json()
-        logger.info(f"Received data: {data}")
-        
-        if not data:
-            logger.error("No JSON data received")
-            return jsonify({
-                'success': False,
-                'message': 'No data received',
-                'debug': 'no_data'
-            }), 400
-            
         username = data.get('username')
         password = data.get('password')
         
-        logger.info(f"Login attempt for username: {username}")
-        
         if not username or not password:
-            logger.error("Missing username or password")
             return jsonify({
                 'success': False,
-                'message': 'Username and password are required',
-                'debug': 'missing_credentials'
+                'message': 'Username and password are required'
             }), 400
         
-        # Verify credentials
-        logger.info(f"Verifying credentials for: {username}")
-        logger.info(f"Expected username: {ADMIN_USERNAME}")
-        
-        # Debug password verification
-        try:
-            password_matches = bcrypt.checkpw(password.encode('utf-8'), ADMIN_PASSWORD_HASH)
-            logger.info(f"Password matches: {password_matches}")
-        except Exception as e:
-            logger.error(f"Password check error: {e}")
-            password_matches = False
+        password_matches = bcrypt.checkpw(password.encode('utf-8'), ADMIN_PASSWORD_HASH)
         
         if username == ADMIN_USERNAME and password_matches:
             user = User(username)
             login_user(user)
-            logger.info(f"✅ Successful login for: {username}")
-            response_data = {
+            return jsonify({
                 'success': True,
                 'message': 'Login successful',
                 'redirect': '/admin_dashboard'
-            }
-            logger.info(f"Returning response: {response_data}")
-            return jsonify(response_data)
+            })
         else:
-            logger.warning(f"❌ Failed login attempt for: {username}")
             return jsonify({
                 'success': False,
-                'message': 'Invalid credentials. Please try again.',
-                'debug': 'invalid_credentials'
+                'message': 'Invalid credentials. Please try again.'
             }), 401
             
     except Exception as e:
-        logger.error(f"💥 Login error: {str(e)}", exc_info=True)
+        logger.error(f"Login error: {str(e)}")
         return jsonify({
             'success': False,
-            'message': f'Server error during login: {str(e)}',
-            'debug': 'exception_occurred'
+            'message': f'Server error during login: {str(e)}'
         }), 500
 
 @app.route('/api/admin/logout', methods=['POST'])
@@ -488,7 +397,7 @@ def get_results():
 @app.route('/api/voters', methods=['GET'])
 @api_login_required
 def get_voters():
-    """Get list of all registered voters"""
+    """Get list of all registered voters with ID and name system"""
     try:
         voters_collection = get_collection('voters')
         
@@ -497,7 +406,8 @@ def get_voters():
         voters_list = []
         for voter in voters:
             voters_list.append({
-                'matric_number': voter.get('matric_number', ''),
+                'voter_id': voter.get('voter_id', ''),
+                'full_name': voter.get('full_name', ''),
                 'has_voted': voter.get('has_voted', False),
                 'registration_date': voter.get('registration_date', '').isoformat() if voter.get('registration_date') else ''
             })
@@ -512,6 +422,193 @@ def get_voters():
         return jsonify({
             'success': False,
             'message': f'Error fetching voters: {str(e)}'
+        }), 500
+
+@app.route('/api/votes/detailed', methods=['GET'])
+@api_login_required
+def get_detailed_votes():
+    """Get detailed votes with voter information"""
+    try:
+        votes_collection = get_collection('votes')
+        candidates_collection = get_collection('candidates')
+        
+        # Get all votes with voter details
+        votes = list(votes_collection.find({}).sort('vote_date', -1))
+        
+        detailed_votes = []
+        for vote in votes:
+            candidate = candidates_collection.find_one({'_id': ObjectId(vote['candidate_id'])})
+            detailed_votes.append({
+                'voter_id': vote.get('voter_id', ''),
+                'voter_name': vote.get('voter_name', ''),
+                'candidate_name': vote.get('candidate_name', ''),
+                'candidate_position': vote.get('candidate_position', ''),
+                'vote_date': vote.get('vote_date', '').isoformat() if vote.get('vote_date') else '',
+                'candidate_faculty': candidate.get('faculty', '') if candidate else ''
+            })
+        
+        return jsonify({
+            'success': True,
+            'votes': detailed_votes
+        })
+        
+    except Exception as e:
+        logger.error(f"Detailed votes error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Error fetching detailed votes: {str(e)}'
+        }), 500
+
+@app.route('/api/reports/votes-pdf', methods=['GET'])
+@api_login_required
+def generate_votes_pdf():
+    """Generate PDF report of all votes organized by position and candidate"""
+    try:
+        votes_collection = get_collection('votes')
+        candidates_collection = get_collection('candidates')
+        
+        # Get all votes grouped by position and candidate
+        pipeline = [
+            {
+                '$group': {
+                    '_id': {
+                        'position': '$candidate_position',
+                        'candidate_id': '$candidate_id',
+                        'candidate_name': '$candidate_name'
+                    },
+                    'voters': {
+                        '$push': {
+                            'voter_id': '$voter_id',
+                            'voter_name': '$voter_name'
+                        }
+                    },
+                    'total_votes': {'$sum': 1}
+                }
+            },
+            {
+                '$sort': {'_id.position': 1, 'total_votes': -1}
+            }
+        ]
+        
+        votes_data = list(votes_collection.aggregate(pipeline))
+        
+        # Create PDF
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=1*inch)
+        elements = []
+        
+        styles = getSampleStyleSheet()
+        title_style = ParagraphStyle(
+            'CustomTitle',
+            parent=styles['Heading1'],
+            fontSize=16,
+            spaceAfter=30,
+            alignment=1  # Center alignment
+        )
+        
+        # Title
+        title = Paragraph("OBONG UNIVERSITY SRC ELECTION 2025 - VOTE REPORT", title_style)
+        elements.append(title)
+        elements.append(Spacer(1, 0.2*inch))
+        
+        # Generate date
+        date_style = ParagraphStyle(
+            'DateStyle',
+            parent=styles['Normal'],
+            fontSize=10,
+            alignment=1
+        )
+        date_text = Paragraph(f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", date_style)
+        elements.append(date_text)
+        elements.append(Spacer(1, 0.3*inch))
+        
+        # Organize data by position
+        positions_data = {}
+        for item in votes_data:
+            position = item['_id']['position']
+            if position not in positions_data:
+                positions_data[position] = []
+            
+            positions_data[position].append({
+                'candidate_name': item['_id']['candidate_name'],
+                'voters': item['voters'],
+                'total_votes': item['total_votes']
+            })
+        
+        # Create content for each position
+        for position, candidates in positions_data.items():
+            # Position header
+            position_style = ParagraphStyle(
+                'PositionStyle',
+                parent=styles['Heading2'],
+                fontSize=14,
+                spaceAfter=12,
+                spaceBefore=20,
+                textColor=colors.HexColor('#2c8a45')
+            )
+            position_title = Paragraph(f"Position: {position}", position_style)
+            elements.append(position_title)
+            
+            for candidate in candidates:
+                # Candidate header
+                candidate_style = ParagraphStyle(
+                    'CandidateStyle',
+                    parent=styles['Heading3'],
+                    fontSize=12,
+                    spaceAfter=6,
+                    spaceBefore=15
+                )
+                candidate_title = Paragraph(f"Candidate: {candidate['candidate_name']} - Total Votes: {candidate['total_votes']}", candidate_style)
+                elements.append(candidate_title)
+                
+                # Voters table
+                if candidate['voters']:
+                    # Prepare table data
+                    table_data = [['Voter ID', 'Voter Name']]
+                    for voter in candidate['voters']:
+                        table_data.append([voter['voter_id'], voter['voter_name']])
+                    
+                    # Create table
+                    voter_table = Table(table_data, colWidths=[2*inch, 3*inch])
+                    voter_table.setStyle(TableStyle([
+                        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#d13d39')),
+                        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                        ('FONTSIZE', (0, 0), (-1, 0), 10),
+                        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+                        ('FONTSIZE', (0, 1), (-1, -1), 9),
+                        ('GRID', (0, 0), (-1, -1), 1, colors.black)
+                    ]))
+                    elements.append(voter_table)
+                    elements.append(Spacer(1, 0.1*inch))
+                else:
+                    no_votes = Paragraph("No votes recorded for this candidate", styles['Normal'])
+                    elements.append(no_votes)
+                
+                elements.append(Spacer(1, 0.2*inch))
+            
+            # Add page break after each position
+            elements.append(Spacer(1, 0.3*inch))
+        
+        # Build PDF
+        doc.build(elements)
+        
+        # Prepare response
+        buffer.seek(0)
+        response = make_response(buffer.getvalue())
+        response.headers['Content-Type'] = 'application/pdf'
+        response.headers['Content-Disposition'] = f'attachment; filename=election-vote-report-{datetime.now().strftime("%Y%m%d")}.pdf'
+        
+        return response
+        
+    except Exception as e:
+        logger.error(f"PDF generation error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Error generating PDF report: {str(e)}'
         }), 500
 
 @app.route('/api/election/control', methods=['POST'])
@@ -654,6 +751,5 @@ if __name__ == '__main__':
     print("🚀 Starting Admin Dashboard API - Obong University SRC Elections")
     print(f"📊 MongoDB Connected: {db is not None}")
     print(f"🔐 Admin Username: {ADMIN_USERNAME}")
-    print(f"🔑 Admin Password Hash: {ADMIN_PASSWORD_HASH}")
     print(f"🌐 Server running on port: {port}")
     app.run(debug=False, host='0.0.0.0', port=port)
