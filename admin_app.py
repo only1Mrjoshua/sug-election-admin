@@ -480,8 +480,9 @@ def control_election():
             'message': f'Error controlling election: {str(e)}'
         }), 500
 
+# Add this route to your Flask app if missing
 @app.route('/api/election/status', methods=['GET'])
-@api_login_required  # Use custom decorator
+@api_login_required
 def get_election_status():
     """Get current election status"""
     try:
