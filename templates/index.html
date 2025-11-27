@@ -371,10 +371,6 @@
             });
 
             console.log("Response status:", response.status);
-            console.log(
-              "Response headers:",
-              Object.fromEntries(response.headers.entries())
-            );
 
             // Check if response has content
             const contentLength = response.headers.get("content-length");
@@ -412,16 +408,9 @@
               this.showMessage("Login successful! Redirecting...", "success");
               console.log("Login successful, redirecting to dashboard");
 
-              // Redirect to admin dashboard - use the same backend URL
+              // FIXED: Always redirect to the current frontend's admin_dashboard page
               setTimeout(() => {
-                const dashboardUrl = data.redirect || "/admin_dashboard";
-                if (dashboardUrl.startsWith("/")) {
-                  // If it's a relative path, use the backend URL as base
-                  window.location.href =
-                    this.getApiBase().replace("/api", "") + dashboardUrl;
-                } else {
-                  window.location.href = dashboardUrl;
-                }
+                window.location.href = "/admin_dashboard";
               }, 1000);
             } else {
               this.showMessage(
@@ -477,9 +466,9 @@
           const iconClass =
             type === "error" ? "exclamation-circle" : "check-circle";
           alertDiv.innerHTML = `
-        <i class="fas fa-${iconClass}"></i>
-        <span>${message}</span>
-      `;
+            <i class="fas fa-${iconClass}"></i>
+            <span>${message}</span>
+          `;
 
           messageContainer.appendChild(alertDiv);
 
